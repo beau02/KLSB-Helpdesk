@@ -27,9 +27,10 @@ type Ticket = {
   description: string;
   category: string;
   priority: string;
-  status: string;
+  status: "On Going" | "Closed";
   autoReply: string;
   adminReply: string;
+  assignedAdminEmail?: string;
   createdAt?: { toDate: () => Date } | Date | null;
   updatedAt?: { toDate: () => Date } | Date | null;
   repliedAt?: { toDate: () => Date } | Date | null;
@@ -45,6 +46,14 @@ function formatTicketDate(value: Ticket["createdAt"]) {
   }).format(date);
 }
 
+function normalizeTicketStatus(value: unknown): "On Going" | "Closed" {
+  const status = String(value ?? "").trim().toLowerCase();
+  if (status === "done" || status === "completed" || status === "closed" || status === "resolved") {
+    return "Closed";
+  }
+  return "On Going";
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -53,7 +62,7 @@ export default function AdminPage() {
   const [filterStatus, setFilterStatus] = useState<string>("All");
   const [filterPriority, setFilterPriority] = useState<string>("All");
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-  const [editingStatus, setEditingStatus] = useState<string>("Open");
+  const [editingStatus, setEditingStatus] = useState<string>("On Going");
   const [editingPriority, setEditingPriority] = useState<string>("Medium");
   const [adminReplyDraft, setAdminReplyDraft] = useState<string>("");
   const [savingTicket, setSavingTicket] = useState(false);
@@ -101,7 +110,7 @@ export default function AdminPage() {
             }
           },
           (error) => {
-            if (error.code === "permission-denied" && !auth.currentUser) {
+            if (error.code === "permission-denied" && !auth?.currentUser) {
               return;
             }
             console.error("Admin role listener error:", error);
@@ -145,9 +154,10 @@ export default function AdminPage() {
             description: descriptionText || issueText,
             category: String(data.category ?? "General"),
             priority: String(data.priority ?? "Medium"),
-            status: String(data.status ?? "Open"),
+            status: normalizeTicketStatus(data.status),
             autoReply: String(data.autoReply ?? ""),
             adminReply: String(data.adminReply ?? ""),
+            assignedAdminEmail: String(data.assignedAdminEmail ?? ""),
             createdAt: data.createdAt ?? null,
             updatedAt: data.updatedAt ?? null,
             repliedAt: data.repliedAt ?? null,
@@ -175,26 +185,33 @@ export default function AdminPage() {
   useEffect(() => {
     if (!selectedTicket) return;
 
-    setEditingStatus(selectedTicket.status || "Open");
+    setEditingStatus(selectedTicket.status || "On Going");
     setEditingPriority(selectedTicket.priority || "Medium");
     setAdminReplyDraft(selectedTicket.adminReply || "");
     setSaveMessage("");
   }, [selectedTicket]);
 
   const handleSaveTicketUpdate = async () => {
-    if (!db || !selectedTicket) return;
+    if (!db || !selectedTicket || !user) return;
 
     setSavingTicket(true);
     setSaveMessage("");
 
     try {
-      await updateDoc(doc(db, "tickets", selectedTicket.id), {
+      const updateData: Record<string, unknown> = {
         status: editingStatus,
         priority: editingPriority,
         adminReply: adminReplyDraft.trim(),
         updatedAt: serverTimestamp(),
         repliedAt: adminReplyDraft.trim() ? serverTimestamp() : selectedTicket.repliedAt ?? null,
-      });
+      };
+
+      // Assign ticket to admin if there's a reply
+      if (adminReplyDraft.trim()) {
+        updateData.assignedAdminEmail = user.email;
+      }
+
+      await updateDoc(doc(db, "tickets", selectedTicket.id), updateData);
 
       setSaveMessage("Saved. Ticket updated successfully.");
     } catch (error) {
@@ -275,10 +292,8 @@ export default function AdminPage() {
                 className="w-full rounded-lg border border-slate-700/60 bg-slate-900/50 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50"
               >
                 <option>All</option>
-                <option>Open</option>
-                <option>In Progress</option>
-                <option>Completed</option>
-                <option>On Hold</option>
+                <option>On Going</option>
+                <option>Closed</option>
               </select>
             </div>
             <div className="sm:col-span-2">
@@ -345,13 +360,9 @@ export default function AdminPage() {
                         <td className="px-6 py-4">
                           <span
                             className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                              ticket.status === "Completed"
+                              ticket.status === "Closed"
                                 ? "bg-green-500/30 text-green-200"
-                                : ticket.status === "Open"
-                                ? "bg-cyan-500/30 text-cyan-200"
-                                : ticket.status === "In Progress"
-                                ? "bg-blue-500/30 text-blue-200"
-                                : "bg-slate-500/30 text-slate-200"
+                                : "bg-amber-500/30 text-amber-200"
                             }`}
                           >
                             {ticket.status}
@@ -426,13 +437,9 @@ export default function AdminPage() {
                   <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Status</p>
                   <span
                     className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                      selectedTicket.status === "Completed"
+                      selectedTicket.status === "Closed"
                         ? "bg-green-500/30 text-green-200"
-                        : selectedTicket.status === "Open"
-                        ? "bg-cyan-500/30 text-cyan-200"
-                        : selectedTicket.status === "In Progress"
-                        ? "bg-blue-500/30 text-blue-200"
-                        : "bg-slate-500/30 text-slate-200"
+                        : "bg-amber-500/30 text-amber-200"
                     }`}
                   >
                     {selectedTicket.status}
@@ -444,6 +451,13 @@ export default function AdminPage() {
                 <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Created</p>
                 <p className="text-slate-300">{formatTicketDate(selectedTicket.createdAt)}</p>
               </div>
+
+              {selectedTicket.assignedAdminEmail && (
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Assigned To Admin</p>
+                  <p className="text-slate-300">{selectedTicket.assignedAdminEmail}</p>
+                </div>
+              )}
 
               <div className="border-t border-slate-700/40 pt-4">
                 <p className="text-xs uppercase tracking-wider text-slate-400 mb-2">Description</p>
@@ -466,10 +480,8 @@ export default function AdminPage() {
                       onChange={(event) => setEditingStatus(event.target.value)}
                       className="w-full rounded-lg border border-slate-700/60 bg-slate-900/50 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50"
                     >
-                      <option>Open</option>
-                      <option>In Progress</option>
-                      <option>On Hold</option>
-                      <option>Completed</option>
+                      <option>On Going</option>
+                      <option>Closed</option>
                     </select>
                   </label>
 

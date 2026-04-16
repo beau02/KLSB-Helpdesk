@@ -20,7 +20,7 @@ type Ticket = {
   model: string;
   serialNumber: string;
   issue: string;
-  status: "Open" | "In Progress" | "Completed" | "On Hold";
+  status: "On Going" | "Closed";
   createdAt?: { toDate: () => Date } | Date | null;
   updatedAt?: { toDate: () => Date } | Date | null;
 };
@@ -37,17 +37,21 @@ function formatTicketDate(value: Ticket["createdAt"]) {
 
 function getStatusColor(status: string) {
   switch (status) {
-    case "Open":
-      return "bg-blue-500/20 border-blue-400/30 text-blue-200";
-    case "In Progress":
+    case "On Going":
       return "bg-amber-500/20 border-amber-400/30 text-amber-200";
-    case "Completed":
+    case "Closed":
       return "bg-green-500/20 border-green-400/30 text-green-200";
-    case "On Hold":
-      return "bg-orange-500/20 border-orange-400/30 text-orange-200";
     default:
       return "bg-slate-500/20 border-slate-400/30 text-slate-200";
   }
+}
+
+function normalizeTicketStatus(value: unknown): Ticket["status"] {
+  const status = String(value ?? "").trim().toLowerCase();
+  if (status === "done" || status === "completed" || status === "closed" || status === "resolved") {
+    return "Closed";
+  }
+  return "On Going";
 }
 
 export default function StatusPage() {
@@ -99,7 +103,7 @@ export default function StatusPage() {
             model: String(data.model ?? ""),
             serialNumber: String(data.serialNumber ?? ""),
             issue: String(data.issue ?? ""),
-            status: String(data.status ?? "Open") as Ticket["status"],
+            status: normalizeTicketStatus(data.status),
             createdAt: data.createdAt ?? null,
             updatedAt: data.updatedAt ?? null,
           } satisfies Ticket;

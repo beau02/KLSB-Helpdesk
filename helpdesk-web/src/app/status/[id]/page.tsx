@@ -20,9 +20,10 @@ type Ticket = {
   model: string;
   serialNumber: string;
   issue: string;
-  status: "Open" | "In Progress" | "Completed" | "On Hold";
+  status: "On Going" | "Closed";
   autoReply?: string;
   adminReply?: string;
+  assignedAdminEmail?: string;
   createdAt?: { toDate: () => Date } | Date | null;
   updatedAt?: { toDate: () => Date } | Date | null;
   repliedAt?: { toDate: () => Date } | Date | null;
@@ -42,18 +43,21 @@ function formatTicketDate(value: Ticket["createdAt"]) {
 
 function getStatusColor(status: string) {
   switch (status) {
-    case "Open":
-      return "bg-blue-500/20 border-blue-400/30 text-blue-200";
-    case "In Progress":
+    case "On Going":
       return "bg-amber-500/20 border-amber-400/30 text-amber-200";
     case "Closed":
-    case "Completed":
       return "bg-green-500/20 border-green-400/30 text-green-200";
-    case "On Hold":
-      return "bg-orange-500/20 border-orange-400/30 text-orange-200";
     default:
       return "bg-slate-500/20 border-slate-400/30 text-slate-200";
   }
+}
+
+function normalizeTicketStatus(value: unknown): Ticket["status"] {
+  const status = String(value ?? "").trim().toLowerCase();
+  if (status === "done" || status === "completed" || status === "closed" || status === "resolved") {
+    return "Closed";
+  }
+  return "On Going";
 }
 
 export default function TicketDetailPage() {
@@ -121,12 +125,13 @@ export default function TicketDetailPage() {
           model: String(data.model ?? ""),
           serialNumber: String(data.serialNumber ?? ""),
           issue: String(data.issue ?? ""),
-          status: String(data.status ?? "Open") as Ticket["status"],
+          status: normalizeTicketStatus(data.status),
           createdAt: data.createdAt ?? null,
           updatedAt: data.updatedAt ?? null,
           repliedAt: data.repliedAt ?? null,
           autoReply: String(data.autoReply ?? ""),
           adminReply: String(data.adminReply ?? ""),
+          assignedAdminEmail: String(data.assignedAdminEmail ?? ""),
           userEmail: String(data.userEmail ?? ""),
           userId: String(data.userId ?? ""),
         });
@@ -202,83 +207,103 @@ export default function TicketDetailPage() {
                 </span>
               </div>
 
+              {/* Admin in Charge */}
+              {ticket.assignedAdminEmail && (
+                <div className="mb-8 rounded-lg border border-indigo-400/30 bg-indigo-500/10 p-4">
+                  <p className="text-xs uppercase tracking-wider text-indigo-300 mb-1">In Charge Of This Ticket</p>
+                  <p className="text-lg font-semibold text-indigo-100">{ticket.assignedAdminEmail}</p>
+                </div>
+              )}
+
               {/* Timeline */}
               <div className="mb-12 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-8">
                 <h2 className="text-2xl font-bold text-white mb-8">Ticket Timeline</h2>
-                <div className="space-y-6">
+                <div className="h-96 overflow-y-auto pr-4 space-y-12">
                   {/* Submitted */}
-                  <div className="flex gap-4">
+                  <div className="flex gap-4 pb-8 min-h-fit">
                     <div className="flex flex-col items-center">
-                      <div className="h-12 w-12 rounded-full bg-blue-500/30 border border-blue-400/50 flex items-center justify-center">
+                      <div className="h-12 w-12 rounded-full bg-blue-500/30 border border-blue-400/50 flex items-center justify-center flex-shrink-0">
                         <div className="h-3 w-3 rounded-full bg-blue-400" />
                       </div>
-                      <div className="h-16 w-0.5 bg-gradient-to-b from-blue-400/50 to-transparent mt-2" />
+                      <div className="h-20 w-0.5 bg-gradient-to-b from-blue-400/50 to-transparent mt-2" />
                     </div>
-                    <div className="pt-2">
-                      <p className="font-semibold text-white">Submitted</p>
-                      <p className="text-sm text-slate-400 mt-1">{formatTicketDate(ticket.createdAt)}</p>
-                      <p className="text-sm text-slate-300 mt-2">Your ticket was successfully submitted to the support system.</p>
+                    <div className="pt-2 flex-1">
+                      <p className="font-semibold text-white text-lg">Submitted</p>
+                      <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.createdAt)}</p>
+                      <p className="text-sm text-slate-300 mt-3">Your ticket was successfully submitted to the support system.</p>
                     </div>
                   </div>
 
-                  {/* Current Status */}
-                  <div className="flex gap-4">
+                  {/* Issue Description */}
+                  <div className="flex gap-4 pb-8 min-h-fit">
                     <div className="flex flex-col items-center">
-                      <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center ${
-                        ticket.status === "Open" ? "bg-blue-500/30 border-blue-400/50" :
-                        ticket.status === "In Progress" ? "bg-amber-500/30 border-amber-400/50" :
-                        ticket.status === "Completed" ? "bg-green-500/30 border-green-400/50" :
-                        "bg-orange-500/30 border-orange-400/50"
-                      }`}>
-                        <div className={`h-3 w-3 rounded-full ${
-                          ticket.status === "Open" ? "bg-blue-400" :
-                          ticket.status === "In Progress" ? "bg-amber-400" :
-                          ticket.status === "Completed" ? "bg-green-400" :
-                          "bg-orange-400"
-                        }`} />
+                      <div className="h-12 w-12 rounded-full bg-purple-500/30 border border-purple-400/50 flex items-center justify-center flex-shrink-0">
+                        <div className="h-3 w-3 rounded-full bg-purple-400" />
                       </div>
-                      {ticket.status !== "Completed" && <div className="h-16 w-0.5 bg-gradient-to-b from-slate-500/30 to-transparent mt-2" />}
+                      <div className="h-20 w-0.5 bg-gradient-to-b from-purple-400/50 to-transparent mt-2" />
                     </div>
-                    <div className="pt-2">
-                      <p className="font-semibold text-white">{ticket.status}</p>
-                      <p className="text-sm text-slate-400 mt-1">{formatTicketDate(ticket.updatedAt)}</p>
-                      <p className="text-sm text-slate-300 mt-2">
-                        {ticket.status === "Open" && "Your ticket is awaiting review by our support team."}
-                        {ticket.status === "In Progress" && "Our team is currently working on your issue."}
-                        {ticket.status === "Closed" && "Your ticket has been resolved."}
-                        {ticket.status === "Completed" && "Your ticket has been resolved."}
-                        {ticket.status === "On Hold" && "Your ticket is currently on hold pending additional information."}
-                      </p>
+                    <div className="pt-2 flex-1">
+                      <p className="font-semibold text-white text-lg">Issue Details</p>
+                      <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.createdAt)}</p>
+                      <p className="text-sm text-slate-300 mt-3 border-l-2 border-purple-400/50 pl-3">{ticket.issue}</p>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="mt-8 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-6">
-                <h3 className="text-lg font-bold text-white mb-4">Support Messages</h3>
-
-                <div className="space-y-4">
-                  <div className="rounded-lg border border-cyan-400/30 bg-slate-900/50 p-4">
-                    <p className="text-xs uppercase tracking-wider text-cyan-300 mb-2">Auto Reply</p>
-                    <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">
-                      {ticket.autoReply || "Your ticket has been received. Our support team will review it and respond as soon as possible."}
-                    </p>
-                  </div>
-
-                  {ticket.adminReply ? (
-                    <div className="rounded-lg border border-green-400/30 bg-green-500/10 p-4">
-                      <p className="text-xs uppercase tracking-wider text-green-300 mb-2">Admin Reply</p>
-                      <p className="text-slate-100 leading-relaxed whitespace-pre-wrap">{ticket.adminReply}</p>
-                      <p className="text-xs text-slate-400 mt-3">
-                        Updated: {formatTicketDate(ticket.repliedAt ?? ticket.updatedAt ?? ticket.createdAt)}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                      <p className="text-xs uppercase tracking-wider text-slate-400 mb-2">Admin Reply</p>
-                      <p className="text-slate-300">No admin reply yet. We will update you soon.</p>
+                  {/* Assigned to Admin */}
+                  {ticket.assignedAdminEmail && (
+                    <div className="flex gap-4 pb-8 min-h-fit">
+                      <div className="flex flex-col items-center">
+                        <div className="h-12 w-12 rounded-full bg-indigo-500/30 border border-indigo-400/50 flex items-center justify-center flex-shrink-0">
+                          <div className="h-3 w-3 rounded-full bg-indigo-400" />
+                        </div>
+                        <div className="h-20 w-0.5 bg-gradient-to-b from-indigo-400/50 to-transparent mt-2" />
+                      </div>
+                      <div className="pt-2 flex-1">
+                        <p className="font-semibold text-white text-lg">In Charge: {ticket.assignedAdminEmail}</p>
+                        <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.repliedAt ?? ticket.updatedAt)}</p>
+                        <p className="text-sm text-slate-300 mt-3">Admin assigned to handle this ticket</p>
+                      </div>
                     </div>
                   )}
+
+                  {/* Admin Reply */}
+                  {ticket.adminReply && (
+                    <div className="flex gap-4 pb-8 min-h-fit">
+                      <div className="flex flex-col items-center">
+                        <div className="h-12 w-12 rounded-full bg-green-500/30 border border-green-400/50 flex items-center justify-center flex-shrink-0">
+                          <div className="h-3 w-3 rounded-full bg-green-400" />
+                        </div>
+                        <div className="h-20 w-0.5 bg-gradient-to-b from-green-400/50 to-transparent mt-2" />
+                      </div>
+                      <div className="pt-2 flex-1">
+                        <p className="font-semibold text-white text-lg">Reply from {ticket.assignedAdminEmail}</p>
+                        <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.repliedAt)}</p>
+                        <p className="text-sm text-slate-300 mt-3 border-l-2 border-green-400/50 pl-3">{ticket.adminReply}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Current Status */}
+                  <div className="flex gap-4 pb-8 min-h-fit">
+                    <div className="flex flex-col items-center">
+                      <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        ticket.status === "Closed" ? "bg-green-500/30 border-green-400/50" : "bg-amber-500/30 border-amber-400/50"
+                      }`}>
+                        <div className={`h-3 w-3 rounded-full ${
+                          ticket.status === "Closed" ? "bg-green-400" : "bg-amber-400"
+                        }`} />
+                      </div>
+                      {ticket.status !== "Closed" && <div className="h-20 w-0.5 bg-gradient-to-b from-slate-500/30 to-transparent mt-2" />}
+                    </div>
+                    <div className="pt-2 flex-1">
+                      <p className="font-semibold text-white text-lg">{ticket.status}</p>
+                      <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.updatedAt)}</p>
+                      <p className="text-sm text-slate-300 mt-3">
+                        {ticket.status === "On Going" && "Our team is still working on your issue."}
+                        {ticket.status === "Closed" && "Your issue has been resolved."}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 

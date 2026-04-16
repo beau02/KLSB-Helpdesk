@@ -241,7 +241,7 @@ export default function Home() {
         description: ticketForm.description.trim(),
         category: ticketForm.category,
         priority: ticketForm.priority,
-        status: "Open",
+        status: "On Going",
         autoReply: autoReplyMessage,
         adminReply: "",
         createdAt: serverTimestamp(),

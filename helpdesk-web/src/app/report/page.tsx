@@ -104,7 +104,7 @@ export default function ReportPage() {
         model: form.model.trim(),
         serialNumber: form.serialNumber.trim(),
         issue: form.issue.trim(),
-        status: "Open",
+        status: "On Going",
         autoReply: autoReplyMessage,
         adminReply: "",
         createdAt: serverTimestamp(),
