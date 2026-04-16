@@ -234,62 +234,33 @@ export default function Home() {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.18),_transparent_32%),linear-gradient(135deg,_#06101d,_#0b1324_46%,_#111827)] px-4 py-6 text-slate-100 sm:px-6 lg:px-10">
-        <section className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-7xl gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-stretch">
-          <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/5 p-8 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-10 lg:p-12">
-            <div className="absolute -left-24 top-8 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl" />
-            <div className="absolute -bottom-24 right-0 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_34%),linear-gradient(135deg,_#08111f,_#0f172a_48%,_#111827)] px-6 py-10 text-slate-100 sm:px-10">
+        <div className="ml-0">
+          <div className="mb-12 flex items-start justify-between">
+            <BrandLogo />
+            <span className="inline-flex rounded-full border border-cyan-400/50 bg-cyan-400/20 px-5 py-2 text-sm font-semibold text-cyan-300 shadow-lg shadow-cyan-500/20">
+              KLSB Helpdesk
+            </span>
+          </div>
+          <section className="mx-auto grid max-w-6xl min-h-[calc(100vh-12rem)] gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+            <div className="space-y-6">
+              <h1 className="max-w-2xl text-5xl font-black tracking-tight text-white sm:text-6xl">
+                Your one stop centre
+              </h1>
+              <p className="max-w-2xl text-base leading-7 text-slate-300">
+                Comprehensive support and warranty assistance for all KLSB's clients in one secure portal.
+              </p>
+            </div>
 
-            <div className="relative flex h-full flex-col justify-between gap-10">
-              <div className="flex items-start justify-between gap-6">
-                <BrandLogo />
-                <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200">
-                  KLSB Helpdesk
-                </span>
-              </div>
-
-              <div className="max-w-2xl space-y-6">
-                <p className="text-sm uppercase tracking-[0.35em] text-cyan-200/70">Support portal</p>
-                <h1 className="text-5xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl">
-                  One portal for requests, updates, and support flow.
-                </h1>
-                <p className="max-w-xl text-base leading-8 text-slate-300 sm:text-lg">
-                  Comprehensive support and warranty assistance for all KLSB clients in one secure space, built for quick sign in and fast ticket submission.
+            <div className="rounded-[2rem] border border-white/10 bg-white/8 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
+              <div className="mb-8 border-b border-white/10 pb-6">
+                <h2 className="text-center text-lg font-semibold text-white">Access your account</h2>
+                <p className="mt-1 text-center text-sm text-slate-400">
+                  {mode === "login" ? "Sign in to your account" : "Create a new account to get started"}
                 </p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Access</p>
-                  <p className="mt-2 text-sm text-white">Sign in or register</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Tickets</p>
-                  <p className="mt-2 text-sm text-white">Create and track issues</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Sync</p>
-                  <p className="mt-2 text-sm text-white">Firestore updates live</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-center rounded-[28px] border border-white/10 bg-slate-950/55 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8 lg:p-10">
-            <div className="w-full max-w-xl rounded-[24px] border border-white/10 bg-white/6 p-6 sm:p-8">
-              <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
-                <div>
-                  <h2 className="text-2xl font-semibold text-white">Access your account</h2>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {mode === "login" ? "Sign in to continue." : "Create a new account to get started."}
-                  </p>
-                </div>
-                <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200">
-                  Secure
-                </div>
-              </div>
-
-              <form className="mt-6 space-y-5" onSubmit={handleAuthSubmit}>
+              <form className="mt-8 space-y-5" onSubmit={handleAuthSubmit}>
                 <label className="block space-y-2 text-sm text-slate-300">
                   <span>Email</span>
                   <input
@@ -297,11 +268,10 @@ export default function Home() {
                     onChange={(event) => setEmail(event.target.value)}
                     type="email"
                     required
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none ring-0 transition placeholder:text-slate-500 focus:border-cyan-400/50"
                     placeholder="you@example.com"
                   />
                 </label>
-
                 <label className="block space-y-2 text-sm text-slate-300">
                   <span>Password</span>
                   <input
@@ -310,17 +280,15 @@ export default function Home() {
                     type="password"
                     required
                     minLength={6}
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none ring-0 transition placeholder:text-slate-500 focus:border-cyan-400/50"
                     placeholder="Minimum 6 characters"
                   />
                 </label>
-
                 {authError ? (
                   <p className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                     {authError}
                   </p>
                 ) : null}
-
                 <button
                   type="submit"
                   disabled={loadingAuth}
@@ -336,7 +304,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={() => setMode("register")}
-                        className="font-semibold text-cyan-400 transition hover:text-cyan-300"
+                        className="font-semibold text-cyan-400 hover:text-cyan-300 transition"
                       >
                         Create now
                       </button>
@@ -347,7 +315,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={() => setMode("login")}
-                        className="font-semibold text-cyan-400 transition hover:text-cyan-300"
+                        className="font-semibold text-cyan-400 hover:text-cyan-300 transition"
                       >
                         Sign in
                       </button>
@@ -355,15 +323,15 @@ export default function Home() {
                   )}
                 </div>
 
-                <div className="border-t border-white/10 pt-5">
-                  <p className="text-center text-xs leading-6 text-slate-400">
+                <div className="mt-8 border-t border-white/10 pt-6">
+                  <p className="text-center text-xs text-slate-400">
                     By accessing this portal, you agree to our terms of service and privacy policy.
                   </p>
                 </div>
               </form>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </main>
     );
   }
