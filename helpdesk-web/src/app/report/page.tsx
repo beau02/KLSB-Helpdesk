@@ -93,6 +93,8 @@ export default function ReportPage() {
     setSubmitting(true);
 
     try {
+      const autoReplyMessage = "Your ticket has been received. Our support team will review it and respond as soon as possible.";
+
       await addDoc(collection(db, "tickets"), {
         userId: user.uid,
         userEmail: user.email,
@@ -103,8 +105,11 @@ export default function ReportPage() {
         serialNumber: form.serialNumber.trim(),
         issue: form.issue.trim(),
         status: "Open",
+        autoReply: autoReplyMessage,
+        adminReply: "",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        repliedAt: serverTimestamp(),
       });
 
       setForm(defaultForm);
@@ -164,7 +169,7 @@ export default function ReportPage() {
         <div>
           <article className="max-w-4xl">
             <h1 className="text-5xl font-bold tracking-tight text-white leading-[1.15] mb-8">
-              Report an <span className="bg-gradient-to-r from-cyan-300 via-cyan-200 to-sky-300 bg-clip-text text-transparent">Issue</span>
+              Report  <span className="bg-gradient-to-r from-cyan-300 via-cyan-200 to-sky-300 bg-clip-text text-transparent">Details</span>
             </h1>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -231,7 +236,7 @@ export default function ReportPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-semibold text-white">Issue Description</label>
+                <label className="block text-sm font-semibold text-white">Report an Issue</label>
                 <textarea
                   value={form.issue}
                   onChange={(e) => setForm({ ...form, issue: e.target.value })}

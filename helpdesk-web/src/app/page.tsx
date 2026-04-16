@@ -60,6 +60,7 @@ export default function Home() {
   const [authError, setAuthError] = useState("");
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [ticketForm, setTicketForm] = useState(defaultForm);
   const [ticketError, setTicketError] = useState("");
@@ -76,14 +77,55 @@ export default function Home() {
   );
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || !db) return;
+    const firestore = db;
+
+    let unsubscribeRole: (() => void) | null = null;
 
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
+
+      if (unsubscribeRole) {
+        unsubscribeRole();
+        unsubscribeRole = null;
+      }
+
+      // Fetch user role from Firestore
+      if (nextUser) {
+        const userQuery = query(collection(firestore, "users"), where("uid", "==", nextUser.uid));
+        unsubscribeRole = onSnapshot(
+          userQuery,
+          (snapshot) => {
+            if (!snapshot.empty) {
+              const userData = snapshot.docs[0].data();
+              setUserRole(userData.role || "user");
+            } else {
+              setUserRole("user");
+            }
+          },
+          (error) => {
+            if (error.code === "permission-denied" && !auth?.currentUser) {
+              return;
+            }
+            console.error("Users role listener error:", error);
+          },
+        );
+      } else {
+        setUserRole(null);
+      }
     });
 
-    return unsubscribe;
-  }, []);
+    return () => {
+      if (unsubscribeRole) unsubscribeRole();
+      unsubscribe();
+    };
+  }, [db]);
+
+  useEffect(() => {
+    if (user && userRole === "admin") {
+      router.push("/admin");
+    }
+  }, [router, user, userRole]);
 
   useEffect(() => {
     if (!auth) return;
@@ -102,30 +144,39 @@ export default function Home() {
       where("userId", "==", user.uid),
     );
 
-    return onSnapshot(ticketsQuery, (snapshot) => {
-      const nextTickets = snapshot.docs.map((doc) => {
-        const data = doc.data() as DocumentData;
+    return onSnapshot(
+      ticketsQuery,
+      (snapshot) => {
+        const nextTickets = snapshot.docs.map((doc) => {
+          const data = doc.data() as DocumentData;
 
-        return {
-          id: doc.id,
-          subject: String(data.subject ?? ""),
-          description: String(data.description ?? ""),
-          category: String(data.category ?? ""),
-          priority: String(data.priority ?? ""),
-          status: String(data.status ?? "Open"),
-          createdAt: data.createdAt ?? null,
-        } satisfies Ticket;
-      });
+          return {
+            id: doc.id,
+            subject: String(data.subject ?? ""),
+            description: String(data.description ?? ""),
+            category: String(data.category ?? ""),
+            priority: String(data.priority ?? ""),
+            status: String(data.status ?? "Open"),
+            createdAt: data.createdAt ?? null,
+          } satisfies Ticket;
+        });
 
-      // Sort by createdAt descending on client-side
-      nextTickets.sort((a, b) => {
-        const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
-        const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
-        return dateB.getTime() - dateA.getTime();
-      });
+        // Sort by createdAt descending on client-side
+        nextTickets.sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
+          const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
+          return dateB.getTime() - dateA.getTime();
+        });
 
-      setTickets(nextTickets);
-    });
+        setTickets(nextTickets);
+      },
+      (error) => {
+        if (error.code === "permission-denied" && !auth?.currentUser) {
+          return;
+        }
+        console.error("User tickets listener error:", error);
+      },
+    );
   }, [user]);
 
   const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -141,7 +192,17 @@ export default function Home() {
 
     try {
       if (mode === "register") {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        
+        // Store user role in Firestore
+        if (db) {
+          await addDoc(collection(db, "users"), {
+            uid: userCredential.user.uid,
+            email: userCredential.user.email,
+            role: "user",
+            createdAt: serverTimestamp(),
+          });
+        }
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
@@ -171,6 +232,8 @@ export default function Home() {
     setSubmittingTicket(true);
 
     try {
+      const autoReplyMessage = "Your ticket has been received. Our support team will review it and respond as soon as possible.";
+
       await addDoc(collection(db, "tickets"), {
         userId: user.uid,
         userEmail: user.email,
@@ -179,8 +242,11 @@ export default function Home() {
         category: ticketForm.category,
         priority: ticketForm.priority,
         status: "Open",
+        autoReply: autoReplyMessage,
+        adminReply: "",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        repliedAt: serverTimestamp(),
       });
 
       setTicketForm(defaultForm);
@@ -197,33 +263,33 @@ export default function Home() {
     return (
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.18),_transparent_34%),linear-gradient(135deg,_#0f172a,_#111827_45%,_#1f2937)] px-6 py-10 text-slate-100 sm:px-10">
         <section className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl items-center">
-          <div className="grid w-full gap-8 overflow-hidden rounded-[2rem] border border-white/10 bg-white/6 p-8 shadow-2xl shadow-black/30 backdrop-blur-xl lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
+          <div className="grid w-full gap-8 overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/40 p-8 shadow-2xl shadow-slate-950/60 backdrop-blur-xl lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
             <div className="space-y-6">
               <BrandLogo />
-              <span className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-1 text-sm font-medium text-cyan-200">
-                Firebase setup required
+              <span className="inline-flex rounded-full border border-cyan-400/50 bg-cyan-400/15 px-4 py-1 text-sm font-semibold text-cyan-300">
+                Configuration Required
               </span>
               <h1 className="max-w-xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
                 Support and warranty assistance for KLSB projects and devices.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-                The login page is ready, but Firebase environment variables need to be configured.
+                System initialization in progress. Backend configuration being established.
               </p>
-              <div className="grid gap-3 rounded-3xl border border-white/10 bg-slate-950/45 p-5 text-sm text-slate-300 sm:grid-cols-2">
-                <p>NEXT_PUBLIC_FIREBASE_API_KEY</p>
-                <p>NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN</p>
-                <p>NEXT_PUBLIC_FIREBASE_PROJECT_ID</p>
-                <p>NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET</p>
-                <p>NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID</p>
-                <p>NEXT_PUBLIC_FIREBASE_APP_ID</p>
+              <div className="grid gap-3 rounded-xl border border-slate-700/40 bg-slate-950/60 p-5 text-sm text-slate-300 sm:grid-cols-2">
+                <p className="font-mono">NEXT_PUBLIC_FIREBASE_API_KEY</p>
+                <p className="font-mono">NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN</p>
+                <p className="font-mono">NEXT_PUBLIC_FIREBASE_PROJECT_ID</p>
+                <p className="font-mono">NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET</p>
+                <p className="font-mono">NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID</p>
+                <p className="font-mono">NEXT_PUBLIC_FIREBASE_APP_ID</p>
               </div>
             </div>
-            <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/70 p-6 text-sm text-slate-300">
-              <h2 className="text-lg font-semibold text-white">What this app does</h2>
+            <div className="rounded-xl border border-slate-700/40 bg-slate-950/60 p-6 text-sm text-slate-300">
+              <h2 className="text-lg font-semibold text-white">Platform Features</h2>
               <ul className="mt-4 space-y-3">
-                <li>Sign up or sign in with Firebase Auth.</li>
-                <li>Create tickets in Firestore.</li>
-                <li>See your recent tickets immediately after submission.</li>
+                <li>• Secure user authentication and account management</li>
+                <li>• Create and track support tickets in real-time</li>
+                <li>• Instant confirmation with ticket reference numbers</li>
               </ul>
             </div>
           </div>
@@ -252,47 +318,49 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="rounded-[2rem] border border-white/10 bg-white/8 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
-              <div className="mb-8 border-b border-white/10 pb-6">
-                <h2 className="text-center text-lg font-semibold text-white">Access your account</h2>
-                <p className="mt-1 text-center text-sm text-slate-400">
-                  {mode === "login" ? "Sign in to your account" : "Create a new account to get started"}
-                </p>
+            <div className="rounded-xl border border-slate-700/40 bg-slate-900/50 p-8 shadow-2xl shadow-slate-950/60 backdrop-blur-xl sm:p-10">
+              <div className="mb-8 border-b border-slate-700/40 pb-8">
+                <div>
+                  <h2 className="text-center text-lg font-bold text-white tracking-wide">ACCOUNT ACCESS</h2>
+                  <p className="mt-2 text-center text-sm text-slate-400">
+                    {mode === "login" ? "Authenticate to access your support portal" : "Register a new account to begin"}
+                  </p>
+                </div>
               </div>
 
               <form className="mt-8 space-y-5" onSubmit={handleAuthSubmit}>
-                <label className="block space-y-2 text-sm text-slate-300">
-                  <span>Email</span>
+                <label className="block space-y-2.5 text-sm font-medium text-slate-200">
+                  <span className="text-xs uppercase tracking-wider text-slate-400">Email Address</span>
                   <input
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     type="email"
                     required
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none ring-0 transition placeholder:text-slate-500 focus:border-cyan-400/50"
+                    className="w-full rounded-lg border border-slate-700/60 bg-slate-900/50 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50"
                     placeholder="you@example.com"
                   />
                 </label>
-                <label className="block space-y-2 text-sm text-slate-300">
-                  <span>Password</span>
+                <label className="block space-y-2.5 text-sm font-medium text-slate-200">
+                  <span className="text-xs uppercase tracking-wider text-slate-400">Password</span>
                   <input
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     type="password"
                     required
                     minLength={6}
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none ring-0 transition placeholder:text-slate-500 focus:border-cyan-400/50"
+                    className="w-full rounded-lg border border-slate-700/60 bg-slate-900/50 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50"
                     placeholder="Minimum 6 characters"
                   />
                 </label>
                 {authError ? (
-                  <p className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                  <p className="rounded-lg border border-rose-500/50 bg-rose-500/20 px-4 py-3 text-sm font-medium text-rose-100">
                     {authError}
                   </p>
                 ) : null}
                 <button
                   type="submit"
                   disabled={loadingAuth}
-                  className="w-full rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-lg bg-cyan-500 px-4 py-3 font-bold text-slate-950 transition shadow-lg shadow-cyan-500/40 hover:bg-cyan-400 hover:shadow-cyan-500/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none uppercase tracking-wide"
                 >
                   {loadingAuth ? "Working..." : mode === "login" ? "Sign in" : "Create account"}
                 </button>
@@ -306,24 +374,24 @@ export default function Home() {
                         onClick={() => setMode("register")}
                         className="font-semibold text-cyan-400 hover:text-cyan-300 transition"
                       >
-                        Create now
+                        Register here
                       </button>
                     </>
                   ) : (
                     <>
-                      Already have an account?{" "}
+                      Have an existing account?{" "}
                       <button
                         type="button"
                         onClick={() => setMode("login")}
                         className="font-semibold text-cyan-400 hover:text-cyan-300 transition"
                       >
-                        Sign in
+                        Sign in here
                       </button>
                     </>
                   )}
                 </div>
 
-                <div className="mt-8 border-t border-white/10 pt-6">
+                <div className="mt-8 border-t border-slate-700/40 pt-8">
                   <p className="text-center text-xs text-slate-400">
                     By accessing this portal, you agree to our terms of service and privacy policy.
                   </p>
@@ -336,20 +404,31 @@ export default function Home() {
     );
   }
 
+  // Redirect admin users to admin page
+  if (user && userRole === "admin") {
+    return (
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.18),_transparent_34%),linear-gradient(135deg,_#0f172a,_#111827_45%,_#1f2937)] px-6 py-10 text-slate-100 sm:px-10">
+        <section className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl items-center justify-center">
+          <p className="text-center text-slate-300">Redirecting to admin dashboard...</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_15%_10%,_rgba(34,211,238,0.22),_transparent_30%),radial-gradient(circle_at_85%_85%,_rgba(14,165,233,0.2),_transparent_34%),linear-gradient(180deg,_#040b15_0%,_#071223_44%,_#0e1a30_100%)] px-4 py-6 text-slate-100 sm:px-6 lg:px-10">
       <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
       <div className="pointer-events-none absolute -right-20 bottom-6 h-80 w-80 rounded-full bg-sky-500/10 blur-3xl" />
 
       <section className="mx-auto w-full max-w-6xl px-4 sm:px-6 space-y-8">
-          <header className="flex items-center justify-between gap-6 border-b border-cyan-500/10 pb-6">
+          <header className="flex items-center justify-between gap-6 border-b border-slate-700/30 pb-8">
             <div className="max-w-[300px]">
               <BrandLogo />
             </div>
             <div className="text-sm text-slate-300">
               <span className="font-semibold text-white">{user.email ?? "Guest User"}</span>
               <span className="mx-3 text-slate-600">•</span>
-              <button type="button" onClick={handleSignOut} className="font-medium text-cyan-300 transition hover:text-cyan-200">
+                <button type="button" onClick={handleSignOut} className="font-medium text-cyan-300 transition hover:text-cyan-200 hover:underline">
                 Sign out
               </button>
             </div>
@@ -358,12 +437,12 @@ export default function Home() {
           <div>
             <article className="flex items-center justify-between gap-12">
               <div className="flex-1 space-y-6">
-                <h2 className="text-5xl font-bold tracking-tight text-white leading-[1.15]">
+                <h2 className="text-5xl font-bold tracking-tight text-white leading-tight">
                   Welcome to<br />
-                  <span className="bg-gradient-to-r from-cyan-300 via-cyan-200 to-sky-300 bg-clip-text text-transparent">KLSB Support Center</span>
+                  <span className="bg-gradient-to-r from-cyan-300 via-cyan-200 to-sky-300 bg-clip-text text-transparent font-extrabold">KLSB Support Services</span>
                 </h2>
                 <p className="text-base leading-relaxed text-slate-300/95 max-w-md">
-                  Streamline your support requests with our intelligent ticket system. Every request is assigned a unique number for easy tracking, with complete archives and history available for your reference.
+                  Access our comprehensive support system with intelligent ticket management. Each request receives a unique reference number for streamlined tracking and resolution management.
                 </p>
               </div>
 
@@ -371,19 +450,19 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => router.push("/report")}
-                  className="group relative rounded-xl bg-gradient-to-br from-cyan-400 via-cyan-300 to-cyan-500 px-6 py-3 text-sm font-bold text-slate-900 shadow-[0_12px_32px_rgba(34,211,238,0.3),0_0_0_1px_rgba(125,249,255,0.2)] transition-all duration-300 hover:shadow-[0_16px_48px_rgba(34,211,238,0.4)] hover:-translate-y-1 active:translate-y-0 overflow-hidden"
+                  className="group relative rounded-lg bg-gradient-to-br from-cyan-400 via-cyan-300 to-cyan-500 px-6 py-3 text-sm font-bold text-slate-950 shadow-[0_16px_40px_rgba(34,211,238,0.4),0_0_0_1px_rgba(125,249,255,0.4)] transition-all duration-300 hover:shadow-[0_20px_56px_rgba(34,211,238,0.55)] hover:-translate-y-1 active:translate-y-0 overflow-hidden uppercase tracking-wider"
                 >
                   <span className="relative z-10">Report an Issue</span>
-                  <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="absolute inset-0 bg-white/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </button>
 
                 <button
                   type="button"
                   onClick={() => router.push("/status")}
-                  className="group relative rounded-xl bg-gradient-to-br from-lime-500/40 via-lime-400/30 to-green-500/40 border border-lime-300/30 px-6 py-3 text-sm font-bold text-lime-50 shadow-[0_12px_32px_rgba(132,204,22,0.2),0_0_0_1px_rgba(168,226,46,0.15)] transition-all duration-300 hover:shadow-[0_16px_48px_rgba(132,204,22,0.3)] hover:-translate-y-1 active:translate-y-0 overflow-hidden backdrop-blur-sm"
+                  className="group relative rounded-lg bg-gradient-to-br from-lime-500/50 via-lime-400/40 to-green-500/50 border border-lime-300/50 px-6 py-3 text-sm font-bold text-lime-50 shadow-[0_16px_40px_rgba(132,204,22,0.35),0_0_0_1px_rgba(168,226,46,0.3)] transition-all duration-300 hover:shadow-[0_20px_56px_rgba(132,204,22,0.45)] hover:-translate-y-1 active:translate-y-0 overflow-hidden backdrop-blur-sm uppercase tracking-wider"
                 >
                   <span className="relative z-10">Check Status</span>
-                  <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </button>
               </div>
             </article>

@@ -85,34 +85,45 @@ export default function StatusPage() {
 
     const ticketsQuery = query(collection(db, "tickets"), where("userId", "==", user.uid));
 
-    const unsubscribe = onSnapshot(ticketsQuery, (snapshot) => {
-      const nextTickets = snapshot.docs.map((doc) => {
-        const data = doc.data() as DocumentData;
+    const unsubscribe = onSnapshot(
+      ticketsQuery,
+      (snapshot) => {
+        const nextTickets = snapshot.docs.map((doc) => {
+          const data = doc.data() as DocumentData;
 
-        return {
-          id: doc.id,
-          userName: String(data.userName ?? ""),
-          contactNo: String(data.contactNo ?? ""),
-          location: String(data.location ?? ""),
-          model: String(data.model ?? ""),
-          serialNumber: String(data.serialNumber ?? ""),
-          issue: String(data.issue ?? ""),
-          status: String(data.status ?? "Open") as Ticket["status"],
-          createdAt: data.createdAt ?? null,
-          updatedAt: data.updatedAt ?? null,
-        } satisfies Ticket;
-      });
+          return {
+            id: doc.id,
+            userName: String(data.userName ?? ""),
+            contactNo: String(data.contactNo ?? ""),
+            location: String(data.location ?? ""),
+            model: String(data.model ?? ""),
+            serialNumber: String(data.serialNumber ?? ""),
+            issue: String(data.issue ?? ""),
+            status: String(data.status ?? "Open") as Ticket["status"],
+            createdAt: data.createdAt ?? null,
+            updatedAt: data.updatedAt ?? null,
+          } satisfies Ticket;
+        });
 
-      // Sort on client side to avoid Firestore composite index requirement.
-      nextTickets.sort((a, b) => {
-        const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
-        const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
-        return dateB.getTime() - dateA.getTime();
-      });
+        // Sort on client side to avoid Firestore composite index requirement.
+        nextTickets.sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
+          const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
+          return dateB.getTime() - dateA.getTime();
+        });
 
-      setTickets(nextTickets);
-      setLoading(false);
-    });
+        setTickets(nextTickets);
+        setLoading(false);
+      },
+      (error) => {
+        if (error.code === "permission-denied" && !auth?.currentUser) {
+          setLoading(false);
+          return;
+        }
+        console.error("Status tickets listener error:", error);
+        setLoading(false);
+      },
+    );
 
     return unsubscribe;
   }, [user]);

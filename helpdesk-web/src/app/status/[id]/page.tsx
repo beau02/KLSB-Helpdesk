@@ -21,8 +21,11 @@ type Ticket = {
   serialNumber: string;
   issue: string;
   status: "Open" | "In Progress" | "Completed" | "On Hold";
+  autoReply?: string;
+  adminReply?: string;
   createdAt?: { toDate: () => Date } | Date | null;
   updatedAt?: { toDate: () => Date } | Date | null;
+  repliedAt?: { toDate: () => Date } | Date | null;
   userEmail?: string;
   userId?: string;
 };
@@ -43,6 +46,7 @@ function getStatusColor(status: string) {
       return "bg-blue-500/20 border-blue-400/30 text-blue-200";
     case "In Progress":
       return "bg-amber-500/20 border-amber-400/30 text-amber-200";
+    case "Closed":
     case "Completed":
       return "bg-green-500/20 border-green-400/30 text-green-200";
     case "On Hold":
@@ -120,6 +124,9 @@ export default function TicketDetailPage() {
           status: String(data.status ?? "Open") as Ticket["status"],
           createdAt: data.createdAt ?? null,
           updatedAt: data.updatedAt ?? null,
+          repliedAt: data.repliedAt ?? null,
+          autoReply: String(data.autoReply ?? ""),
+          adminReply: String(data.adminReply ?? ""),
           userEmail: String(data.userEmail ?? ""),
           userId: String(data.userId ?? ""),
         });
@@ -238,11 +245,40 @@ export default function TicketDetailPage() {
                       <p className="text-sm text-slate-300 mt-2">
                         {ticket.status === "Open" && "Your ticket is awaiting review by our support team."}
                         {ticket.status === "In Progress" && "Our team is currently working on your issue."}
+                        {ticket.status === "Closed" && "Your ticket has been resolved."}
                         {ticket.status === "Completed" && "Your ticket has been resolved."}
                         {ticket.status === "On Hold" && "Your ticket is currently on hold pending additional information."}
                       </p>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="mt-8 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-6">
+                <h3 className="text-lg font-bold text-white mb-4">Support Messages</h3>
+
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-cyan-400/30 bg-slate-900/50 p-4">
+                    <p className="text-xs uppercase tracking-wider text-cyan-300 mb-2">Auto Reply</p>
+                    <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">
+                      {ticket.autoReply || "Your ticket has been received. Our support team will review it and respond as soon as possible."}
+                    </p>
+                  </div>
+
+                  {ticket.adminReply ? (
+                    <div className="rounded-lg border border-green-400/30 bg-green-500/10 p-4">
+                      <p className="text-xs uppercase tracking-wider text-green-300 mb-2">Admin Reply</p>
+                      <p className="text-slate-100 leading-relaxed whitespace-pre-wrap">{ticket.adminReply}</p>
+                      <p className="text-xs text-slate-400 mt-3">
+                        Updated: {formatTicketDate(ticket.repliedAt ?? ticket.updatedAt ?? ticket.createdAt)}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                      <p className="text-xs uppercase tracking-wider text-slate-400 mb-2">Admin Reply</p>
+                      <p className="text-slate-300">No admin reply yet. We will update you soon.</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
