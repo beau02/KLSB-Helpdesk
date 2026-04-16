@@ -60,6 +60,126 @@ function normalizeTicketStatus(value: unknown): Ticket["status"] {
   return "On Going";
 }
 
+type TimelineStep = {
+  title: string;
+  date: Ticket["createdAt"];
+  summary: string;
+  detail?: string;
+  iconClassName: string;
+  dotClassName: string;
+  lineClassName: string;
+  detailBorderClassName: string;
+};
+
+function getActiveTimelineStep(ticket: Ticket): TimelineStep {
+  if (ticket.status === "Closed") {
+    return {
+      title: "Closed",
+      date: ticket.updatedAt ?? ticket.repliedAt ?? ticket.createdAt,
+      summary: "Your issue has been resolved.",
+      detail: ticket.adminReply,
+      iconClassName: "bg-green-500/30 border-green-400/50",
+      dotClassName: "bg-green-400",
+      lineClassName: "from-blue-400/50",
+      detailBorderClassName: "border-blue-400/50",
+    };
+  }
+
+  if (ticket.adminReply) {
+    return {
+      title: `Reply from ${ticket.assignedAdminEmail || "Support Team"}`,
+      date: ticket.repliedAt ?? ticket.updatedAt ?? ticket.createdAt,
+      summary: "You received an update from support.",
+      detail: ticket.adminReply,
+      iconClassName: "bg-indigo-500/30 border-indigo-400/50",
+      dotClassName: "bg-indigo-400",
+      lineClassName: "from-blue-400/50",
+      detailBorderClassName: "border-blue-400/50",
+    };
+  }
+
+  if (ticket.assignedAdminEmail) {
+    return {
+      title: `In Charge: ${ticket.assignedAdminEmail}`,
+      date: ticket.repliedAt ?? ticket.updatedAt ?? ticket.createdAt,
+      summary: "Admin assigned to handle this ticket.",
+      iconClassName: "bg-indigo-500/30 border-indigo-400/50",
+      dotClassName: "bg-indigo-400",
+      lineClassName: "from-blue-400/50",
+      detailBorderClassName: "border-blue-400/50",
+    };
+  }
+
+  return {
+    title: "Submitted",
+    date: ticket.createdAt,
+    summary: "Your ticket was successfully submitted to the support system.",
+    detail: ticket.issue,
+    iconClassName: "bg-blue-500/30 border-blue-400/50",
+    dotClassName: "bg-blue-400",
+    lineClassName: "from-blue-400/50",
+    detailBorderClassName: "border-blue-400/50",
+  };
+}
+
+function getTimelineSteps(ticket: Ticket): TimelineStep[] {
+  const steps: TimelineStep[] = [
+    {
+      title: "Submitted",
+      date: ticket.createdAt,
+      summary: "Your ticket was successfully submitted to the support system.",
+      detail: ticket.issue,
+      iconClassName: "bg-blue-500/30 border-blue-400/50",
+      dotClassName: "bg-blue-400",
+      lineClassName: "from-blue-400/50",
+      detailBorderClassName: "border-blue-400/50",
+    },
+  ];
+
+  if (ticket.assignedAdminEmail) {
+    steps.push({
+      title: `In Charge: ${ticket.assignedAdminEmail}`,
+      date: ticket.repliedAt ?? ticket.updatedAt ?? ticket.createdAt,
+      summary: "Admin assigned to handle this ticket.",
+      iconClassName: "bg-indigo-500/30 border-indigo-400/50",
+      dotClassName: "bg-indigo-400",
+      lineClassName: "from-blue-400/50",
+      detailBorderClassName: "border-blue-400/50",
+    });
+  }
+
+  if (ticket.adminReply) {
+    steps.push({
+      title: `Reply from ${ticket.assignedAdminEmail || "Support Team"}`,
+      date: ticket.repliedAt ?? ticket.updatedAt ?? ticket.createdAt,
+      summary: "You received an update from support.",
+      detail: ticket.adminReply,
+      iconClassName: "bg-purple-500/30 border-purple-400/50",
+      dotClassName: "bg-purple-400",
+      lineClassName: "from-blue-400/50",
+      detailBorderClassName: "border-blue-400/50",
+    });
+  }
+
+  steps.push({
+    title: ticket.status,
+    date: ticket.updatedAt ?? ticket.repliedAt ?? ticket.createdAt,
+    summary:
+      ticket.status === "Closed"
+        ? "Your issue has been resolved."
+        : "Our team is still working on your issue.",
+    iconClassName:
+      ticket.status === "Closed"
+        ? "bg-green-500/30 border-green-400/50"
+        : "bg-amber-500/30 border-amber-400/50",
+    dotClassName: ticket.status === "Closed" ? "bg-green-400" : "bg-amber-400",
+    lineClassName: "from-blue-400/50",
+    detailBorderClassName: "border-blue-400/50",
+  });
+
+  return steps;
+}
+
 export default function TicketDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -167,6 +287,8 @@ export default function TicketDetailPage() {
     );
   }
 
+  const timelineSteps = ticket ? getTimelineSteps(ticket) : [];
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_15%_10%,_rgba(34,211,238,0.22),_transparent_30%),radial-gradient(circle_at_85%_85%,_rgba(14,165,233,0.2),_transparent_34%),linear-gradient(180deg,_#040b15_0%,_#071223_44%,_#0e1a30_100%)] px-4 py-6 text-slate-100 sm:px-6 lg:px-10">
       <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
@@ -217,92 +339,35 @@ export default function TicketDetailPage() {
 
               {/* Timeline */}
               <div className="mb-12 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-8">
-                <h2 className="text-2xl font-bold text-white mb-8">Ticket Timeline</h2>
-                <div className="h-96 overflow-y-auto pr-4 space-y-12">
-                  {/* Submitted */}
-                  <div className="flex gap-4 pb-8 min-h-fit">
-                    <div className="flex flex-col items-center">
-                      <div className="h-12 w-12 rounded-full bg-blue-500/30 border border-blue-400/50 flex items-center justify-center flex-shrink-0">
-                        <div className="h-3 w-3 rounded-full bg-blue-400" />
-                      </div>
-                      <div className="h-20 w-0.5 bg-gradient-to-b from-blue-400/50 to-transparent mt-2" />
-                    </div>
-                    <div className="pt-2 flex-1">
-                      <p className="font-semibold text-white text-lg">Submitted</p>
-                      <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.createdAt)}</p>
-                      <p className="text-sm text-slate-300 mt-3">Your ticket was successfully submitted to the support system.</p>
-                    </div>
-                  </div>
-
-                  {/* Issue Description */}
-                  <div className="flex gap-4 pb-8 min-h-fit">
-                    <div className="flex flex-col items-center">
-                      <div className="h-12 w-12 rounded-full bg-purple-500/30 border border-purple-400/50 flex items-center justify-center flex-shrink-0">
-                        <div className="h-3 w-3 rounded-full bg-purple-400" />
-                      </div>
-                      <div className="h-20 w-0.5 bg-gradient-to-b from-purple-400/50 to-transparent mt-2" />
-                    </div>
-                    <div className="pt-2 flex-1">
-                      <p className="font-semibold text-white text-lg">Issue Details</p>
-                      <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.createdAt)}</p>
-                      <p className="text-sm text-slate-300 mt-3 border-l-2 border-purple-400/50 pl-3">{ticket.issue}</p>
-                    </div>
-                  </div>
-
-                  {/* Assigned to Admin */}
-                  {ticket.assignedAdminEmail && (
-                    <div className="flex gap-4 pb-8 min-h-fit">
-                      <div className="flex flex-col items-center">
-                        <div className="h-12 w-12 rounded-full bg-indigo-500/30 border border-indigo-400/50 flex items-center justify-center flex-shrink-0">
-                          <div className="h-3 w-3 rounded-full bg-indigo-400" />
+                <div className="mb-4 flex items-end justify-between gap-4">
+                  <h2 className="text-2xl font-bold text-white">Ticket Timeline</h2>
+                  <p className="text-xs text-cyan-200/80">Scroll to view next update</p>
+                </div>
+                <div className="hide-scrollbar relative h-56 snap-y snap-mandatory overflow-y-auto">
+                  <div className="pointer-events-none absolute left-[23px] top-0 h-full w-[2px] bg-gradient-to-b from-blue-400/75 via-blue-400/45 to-blue-300/10" />
+                  <div className="relative">
+                    {timelineSteps.map((step, index) => (
+                      <div key={`${step.title}-${index}`} className="snap-start min-h-56 py-2">
+                        <div className="flex gap-4">
+                          <div className="flex w-12 flex-col items-center">
+                            <div className={`h-12 w-12 rounded-full border flex items-center justify-center flex-shrink-0 ${step.iconClassName}`}>
+                              <div className={`h-3 w-3 rounded-full ${step.dotClassName}`} />
+                            </div>
+                            <div className="mt-2 h-16 w-[2px] bg-blue-400/55" />
+                          </div>
+                          <div className="pt-2 flex-1">
+                            <p className="font-semibold text-white text-lg">{step.title}</p>
+                            <p className="text-sm text-slate-400 mt-2">{formatTicketDate(step.date)}</p>
+                            <p className="text-sm text-slate-300 mt-3">{step.summary}</p>
+                            {step.detail ? (
+                              <p className={`text-sm text-slate-300 mt-3 border-l-2 pl-3 ${step.detailBorderClassName}`}>
+                                {step.detail}
+                              </p>
+                            ) : null}
+                          </div>
                         </div>
-                        <div className="h-20 w-0.5 bg-gradient-to-b from-indigo-400/50 to-transparent mt-2" />
                       </div>
-                      <div className="pt-2 flex-1">
-                        <p className="font-semibold text-white text-lg">In Charge: {ticket.assignedAdminEmail}</p>
-                        <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.repliedAt ?? ticket.updatedAt)}</p>
-                        <p className="text-sm text-slate-300 mt-3">Admin assigned to handle this ticket</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Admin Reply */}
-                  {ticket.adminReply && (
-                    <div className="flex gap-4 pb-8 min-h-fit">
-                      <div className="flex flex-col items-center">
-                        <div className="h-12 w-12 rounded-full bg-green-500/30 border border-green-400/50 flex items-center justify-center flex-shrink-0">
-                          <div className="h-3 w-3 rounded-full bg-green-400" />
-                        </div>
-                        <div className="h-20 w-0.5 bg-gradient-to-b from-green-400/50 to-transparent mt-2" />
-                      </div>
-                      <div className="pt-2 flex-1">
-                        <p className="font-semibold text-white text-lg">Reply from {ticket.assignedAdminEmail}</p>
-                        <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.repliedAt)}</p>
-                        <p className="text-sm text-slate-300 mt-3 border-l-2 border-green-400/50 pl-3">{ticket.adminReply}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Current Status */}
-                  <div className="flex gap-4 pb-8 min-h-fit">
-                    <div className="flex flex-col items-center">
-                      <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                        ticket.status === "Closed" ? "bg-green-500/30 border-green-400/50" : "bg-amber-500/30 border-amber-400/50"
-                      }`}>
-                        <div className={`h-3 w-3 rounded-full ${
-                          ticket.status === "Closed" ? "bg-green-400" : "bg-amber-400"
-                        }`} />
-                      </div>
-                      {ticket.status !== "Closed" && <div className="h-20 w-0.5 bg-gradient-to-b from-slate-500/30 to-transparent mt-2" />}
-                    </div>
-                    <div className="pt-2 flex-1">
-                      <p className="font-semibold text-white text-lg">{ticket.status}</p>
-                      <p className="text-sm text-slate-400 mt-2">{formatTicketDate(ticket.updatedAt)}</p>
-                      <p className="text-sm text-slate-300 mt-3">
-                        {ticket.status === "On Going" && "Our team is still working on your issue."}
-                        {ticket.status === "Closed" && "Your issue has been resolved."}
-                      </p>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
