@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import {
   browserLocalPersistence,
   createUserWithEmailAndPassword,
@@ -52,6 +53,7 @@ function formatTicketDate(value: Ticket["createdAt"]) {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -71,15 +73,6 @@ export default function Home() {
 
   const BrandLogo = () => (
     <img src="/klsb-logo.png" alt="KLSB Kemuncak Lanai SDN BHD" className="h-auto w-64" />
-  );
-
-  const stats = useMemo(
-    () => [
-      { label: "Open tickets", value: tickets.length.toString() },
-      { label: "Priority", value: ticketForm.priority },
-      { label: "Workspace", value: "Firebase" },
-    ],
-    [ticketForm.priority, tickets.length],
   );
 
   useEffect(() => {
@@ -107,7 +100,6 @@ export default function Home() {
     const ticketsQuery = query(
       collection(db, "tickets"),
       where("userId", "==", user.uid),
-      orderBy("createdAt", "desc"),
     );
 
     return onSnapshot(ticketsQuery, (snapshot) => {
@@ -123,6 +115,13 @@ export default function Home() {
           status: String(data.status ?? "Open"),
           createdAt: data.createdAt ?? null,
         } satisfies Ticket;
+      });
+
+      // Sort by createdAt descending on client-side
+      nextTickets.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
+        const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
+        return dateB.getTime() - dateA.getTime();
       });
 
       setTickets(nextTickets);
@@ -235,262 +234,192 @@ export default function Home() {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.18),_transparent_34%),linear-gradient(135deg,_#08111f,_#0f172a_48%,_#111827)] px-6 py-10 text-slate-100 sm:px-10">
-        <div className="ml-0">
-          <div className="mb-12 flex items-start justify-between">
-            <BrandLogo />
-            <span className="inline-flex rounded-full border border-cyan-400/50 bg-cyan-400/20 px-5 py-2 text-sm font-semibold text-cyan-300 shadow-lg shadow-cyan-500/20">
-              Helpdesk portal
-            </span>
-          </div>
-          <section className="mx-auto grid max-w-6xl min-h-[calc(100vh-12rem)] gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-            <div className="space-y-6">
-              <h1 className="max-w-2xl text-5xl font-black tracking-tight text-white sm:text-6xl">
-                Your one stop centre
-              </h1>
-              <p className="max-w-2xl text-base leading-7 text-slate-300">
-                Comprehensive support and warranty assistance for all KLSB's clients in one secure portal.
-              </p>
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.18),_transparent_32%),linear-gradient(135deg,_#06101d,_#0b1324_46%,_#111827)] px-4 py-6 text-slate-100 sm:px-6 lg:px-10">
+        <section className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-7xl gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-stretch">
+          <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/5 p-8 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-10 lg:p-12">
+            <div className="absolute -left-24 top-8 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl" />
+            <div className="absolute -bottom-24 right-0 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />
+
+            <div className="relative flex h-full flex-col justify-between gap-10">
+              <div className="flex items-start justify-between gap-6">
+                <BrandLogo />
+                <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200">
+                  KLSB Helpdesk
+                </span>
+              </div>
+
+              <div className="max-w-2xl space-y-6">
+                <p className="text-sm uppercase tracking-[0.35em] text-cyan-200/70">Support portal</p>
+                <h1 className="text-5xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl">
+                  One portal for requests, updates, and support flow.
+                </h1>
+                <p className="max-w-xl text-base leading-8 text-slate-300 sm:text-lg">
+                  Comprehensive support and warranty assistance for all KLSB clients in one secure space, built for quick sign in and fast ticket submission.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Access</p>
+                  <p className="mt-2 text-sm text-white">Sign in or register</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Tickets</p>
+                  <p className="mt-2 text-sm text-white">Create and track issues</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Sync</p>
+                  <p className="mt-2 text-sm text-white">Firestore updates live</p>
+                </div>
+              </div>
             </div>
-
-            <div className="rounded-[2rem] border border-white/10 bg-white/8 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
-              <div className="mb-8 pb-6 border-b border-white/10">
-                <h2 className="text-center text-lg font-semibold text-white">Access your account</h2>
-                <p className="mt-1 text-center text-sm text-slate-400">{mode === "login" ? "Sign in to your account" : "Create a new account to get started"}</p>
-              </div>
-
-              <form className="mt-8 space-y-5" onSubmit={handleAuthSubmit}>
-              <label className="block space-y-2 text-sm text-slate-300">
-                <span>Email</span>
-                <input
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  type="email"
-                  required
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none ring-0 transition placeholder:text-slate-500 focus:border-cyan-400/50"
-                  placeholder="you@example.com"
-                />
-              </label>
-              <label className="block space-y-2 text-sm text-slate-300">
-                <span>Password</span>
-                <input
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  type="password"
-                  required
-                  minLength={6}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none ring-0 transition placeholder:text-slate-500 focus:border-cyan-400/50"
-                  placeholder="Minimum 6 characters"
-                />
-              </label>
-              {authError ? (
-                <p className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                  {authError}
-                </p>
-              ) : null}
-              <button
-                type="submit"
-                disabled={loadingAuth}
-                  className="w-full rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loadingAuth ? "Working..." : mode === "login" ? "Sign in" : "Create account"}
-              </button>
-              
-              <div className="text-center text-sm text-slate-300">
-                {mode === "login" ? (
-                  <>
-                    Don't have an account?{" "}
-                    <button
-                      type="button"
-                      onClick={() => setMode("register")}
-                      className="font-semibold text-cyan-400 hover:text-cyan-300 transition"
-                    >
-                      Create now
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    Already have an account?{" "}
-                    <button
-                      type="button"
-                      onClick={() => setMode("login")}
-                      className="font-semibold text-cyan-400 hover:text-cyan-300 transition"
-                    >
-                      Sign in
-                    </button>
-                  </>
-                )}
-              </div>
-              
-              <div className="mt-8 border-t border-white/10 pt-6">
-                <p className="text-center text-xs text-slate-400">
-                  By accessing this portal, you agree to our terms of service and privacy policy.
-                </p>
-              </div>
-            </form>
           </div>
-          </section>
-        </div>
+
+          <div className="flex items-center justify-center rounded-[28px] border border-white/10 bg-slate-950/55 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8 lg:p-10">
+            <div className="w-full max-w-xl rounded-[24px] border border-white/10 bg-white/6 p-6 sm:p-8">
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
+                <div>
+                  <h2 className="text-2xl font-semibold text-white">Access your account</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {mode === "login" ? "Sign in to continue." : "Create a new account to get started."}
+                  </p>
+                </div>
+                <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200">
+                  Secure
+                </div>
+              </div>
+
+              <form className="mt-6 space-y-5" onSubmit={handleAuthSubmit}>
+                <label className="block space-y-2 text-sm text-slate-300">
+                  <span>Email</span>
+                  <input
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    type="email"
+                    required
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
+                    placeholder="you@example.com"
+                  />
+                </label>
+
+                <label className="block space-y-2 text-sm text-slate-300">
+                  <span>Password</span>
+                  <input
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    type="password"
+                    required
+                    minLength={6}
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
+                    placeholder="Minimum 6 characters"
+                  />
+                </label>
+
+                {authError ? (
+                  <p className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                    {authError}
+                  </p>
+                ) : null}
+
+                <button
+                  type="submit"
+                  disabled={loadingAuth}
+                  className="w-full rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loadingAuth ? "Working..." : mode === "login" ? "Sign in" : "Create account"}
+                </button>
+
+                <div className="text-center text-sm text-slate-300">
+                  {mode === "login" ? (
+                    <>
+                      Don't have an account?{" "}
+                      <button
+                        type="button"
+                        onClick={() => setMode("register")}
+                        className="font-semibold text-cyan-400 transition hover:text-cyan-300"
+                      >
+                        Create now
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      Already have an account?{" "}
+                      <button
+                        type="button"
+                        onClick={() => setMode("login")}
+                        className="font-semibold text-cyan-400 transition hover:text-cyan-300"
+                      >
+                        Sign in
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div className="border-t border-white/10 pt-5">
+                  <p className="text-center text-xs leading-6 text-slate-400">
+                    By accessing this portal, you agree to our terms of service and privacy policy.
+                  </p>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_30%),linear-gradient(135deg,_#06101d,_#0b1324_46%,_#111827)] px-6 py-8 text-slate-100 sm:px-10">
-      <section className="mx-auto flex max-w-7xl flex-col gap-6">
-        <header className="flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/8 p-6 shadow-2xl shadow-black/25 backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <span className="text-sm uppercase tracking-[0.3em] text-cyan-200/80">KLSB Helpdesk</span>
-            <h1 className="mt-2 text-3xl font-semibold text-white">New ticket workspace</h1>
-            <p className="mt-2 text-sm text-slate-300">
-              Support and warranty requests for KLSB projects and devices.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="self-start rounded-full border border-white/10 bg-slate-950/40 px-5 py-2.5 text-sm font-medium text-white transition hover:border-cyan-400/40 hover:bg-slate-950/70"
-          >
-            Sign out
-          </button>
-        </header>
+    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_15%_10%,_rgba(34,211,238,0.22),_transparent_30%),radial-gradient(circle_at_85%_85%,_rgba(14,165,233,0.2),_transparent_34%),linear-gradient(180deg,_#040b15_0%,_#071223_44%,_#0e1a30_100%)] px-4 py-6 text-slate-100 sm:px-6 lg:px-10">
+      <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
+      <div className="pointer-events-none absolute -right-20 bottom-6 h-80 w-80 rounded-full bg-sky-500/10 blur-3xl" />
 
-        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <section className="rounded-[2rem] border border-white/10 bg-white/8 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl sm:p-8">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold text-white">Create a ticket</h2>
-                <p className="mt-2 text-sm text-slate-300">Submit the request details and it will be saved to Firestore.</p>
-              </div>
-              <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm text-cyan-100">
-                Live sync
-              </span>
+      <section className="mx-auto w-full max-w-6xl px-4 sm:px-6 space-y-8">
+          <header className="flex items-center justify-between gap-6 border-b border-cyan-500/10 pb-6">
+            <div className="max-w-[300px]">
+              <BrandLogo />
             </div>
-
-            <form className="mt-8 grid gap-4" onSubmit={handleTicketSubmit}>
-              <label className="block space-y-2 text-sm text-slate-300">
-                <span>Subject</span>
-                <input
-                  value={ticketForm.subject}
-                  onChange={(event) =>
-                    setTicketForm((current) => ({ ...current, subject: event.target.value }))
-                  }
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
-                  placeholder="Example: Laptop will not connect to Wi-Fi"
-                />
-              </label>
-
-              <label className="block space-y-2 text-sm text-slate-300">
-                <span>Description</span>
-                <textarea
-                  value={ticketForm.description}
-                  onChange={(event) =>
-                    setTicketForm((current) => ({ ...current, description: event.target.value }))
-                  }
-                  rows={6}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
-                  placeholder="Tell the support team what happened, when it started, and what you already tried."
-                />
-              </label>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block space-y-2 text-sm text-slate-300">
-                  <span>Category</span>
-                  <select
-                    value={ticketForm.category}
-                    onChange={(event) =>
-                      setTicketForm((current) => ({ ...current, category: event.target.value }))
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none transition focus:border-cyan-400/50"
-                  >
-                    <option>Hardware</option>
-                    <option>Software</option>
-                    <option>Account</option>
-                    <option>Network</option>
-                    <option>Access</option>
-                  </select>
-                </label>
-
-                <label className="block space-y-2 text-sm text-slate-300">
-                  <span>Priority</span>
-                  <select
-                    value={ticketForm.priority}
-                    onChange={(event) =>
-                      setTicketForm((current) => ({ ...current, priority: event.target.value }))
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white outline-none transition focus:border-cyan-400/50"
-                  >
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                    <option>Critical</option>
-                  </select>
-                </label>
-              </div>
-
-              {ticketError ? (
-                <p className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                  {ticketError}
-                </p>
-              ) : null}
-
-              {ticketSuccess ? (
-                <p className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-                  {ticketSuccess}
-                </p>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={submittingTicket}
-                className="rounded-2xl bg-cyan-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {submittingTicket ? "Submitting..." : "Create ticket"}
+            <div className="text-sm text-slate-300">
+              <span className="font-semibold text-white">{user.email ?? "Guest User"}</span>
+              <span className="mx-3 text-slate-600">•</span>
+              <button type="button" onClick={handleSignOut} className="font-medium text-cyan-300 transition hover:text-cyan-200">
+                Sign out
               </button>
-            </form>
-          </section>
+            </div>
+          </header>
 
-          <aside className="rounded-[2rem] border border-white/10 bg-slate-950/45 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl sm:p-8">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold text-white">Recent tickets</h2>
-                <p className="mt-2 text-sm text-slate-300">Your latest Firestore entries appear here automatically.</p>
+          <div>
+            <article className="flex items-center justify-between gap-12">
+              <div className="flex-1 space-y-6">
+                <h2 className="text-5xl font-bold tracking-tight text-white leading-[1.15]">
+                  Welcome to<br />
+                  <span className="bg-gradient-to-r from-cyan-300 via-cyan-200 to-sky-300 bg-clip-text text-transparent">KLSB Support Center</span>
+                </h2>
+                <p className="text-base leading-relaxed text-slate-300/95 max-w-md">
+                  Streamline your support requests with our intelligent ticket system. Every request is assigned a unique number for easy tracking, with complete archives and history available for your reference.
+                </p>
               </div>
-              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
-                {tickets.length} total
-              </span>
-            </div>
 
-            <div className="mt-6 space-y-4">
-              {tickets.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-white/10 bg-white/5 p-6 text-sm text-slate-300">
-                  No tickets yet. Create the first one on the left.
-                </div>
-              ) : (
-                tickets.map((ticket) => (
-                  <article key={ticket.id} className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">{ticket.subject}</h3>
-                        <p className="mt-1 text-sm text-slate-300">{ticket.category}</p>
-                      </div>
-                      <span className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-medium text-cyan-200">
-                        {ticket.priority}
-                      </span>
-                    </div>
-                    <p className="mt-4 max-h-24 overflow-hidden text-sm leading-6 text-slate-300">
-                      {ticket.description}
-                    </p>
-                    <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
-                      <span>{ticket.status}</span>
-                      <span>{formatTicketDate(ticket.createdAt)}</span>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </aside>
-        </div>
+              <div className="flex flex-col gap-4 min-w-max">
+                <button
+                  type="button"
+                  onClick={() => router.push("/report")}
+                  className="group relative rounded-xl bg-gradient-to-br from-cyan-400 via-cyan-300 to-cyan-500 px-6 py-3 text-sm font-bold text-slate-900 shadow-[0_12px_32px_rgba(34,211,238,0.3),0_0_0_1px_rgba(125,249,255,0.2)] transition-all duration-300 hover:shadow-[0_16px_48px_rgba(34,211,238,0.4)] hover:-translate-y-1 active:translate-y-0 overflow-hidden"
+                >
+                  <span className="relative z-10">Report an Issue</span>
+                  <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/status")}
+                  className="group relative rounded-xl bg-gradient-to-br from-lime-500/40 via-lime-400/30 to-green-500/40 border border-lime-300/30 px-6 py-3 text-sm font-bold text-lime-50 shadow-[0_12px_32px_rgba(132,204,22,0.2),0_0_0_1px_rgba(168,226,46,0.15)] transition-all duration-300 hover:shadow-[0_16px_48px_rgba(132,204,22,0.3)] hover:-translate-y-1 active:translate-y-0 overflow-hidden backdrop-blur-sm"
+                >
+                  <span className="relative z-10">Check Status</span>
+                  <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                </button>
+              </div>
+            </article>
+          </div>
       </section>
     </main>
   );
