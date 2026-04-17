@@ -116,7 +116,7 @@ export default function ReportPage() {
         return;
       }
 
-      const autoReplyMessage = "Your ticket has been received. Our support team will review it and respond as soon as possible.";
+      const autoReplyMessage = "Thank you for your report. We have received your submission and will contact you soon for further action.";
       const ticketNumber = Date.now();
       const ticketRef = doc(collection(db!, "tickets"));
 

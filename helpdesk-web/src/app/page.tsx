@@ -232,7 +232,7 @@ export default function Home() {
     setSubmittingTicket(true);
 
     try {
-      const autoReplyMessage = "Your ticket has been received. Our support team will review it and respond as soon as possible.";
+      const autoReplyMessage = "Thank you for your report. We have received your submission and will contact you soon for further action.";
 
       const ticketRef = await addDoc(collection(db, "tickets"), {
         userId: user.uid,
