@@ -23,6 +23,7 @@ type ReportForm = {
   userName: string;
   contactNo: string;
   location: string;
+  deviceType: string;
   model: string;
   serialNumber: string;
   issue: string;
@@ -32,6 +33,7 @@ const defaultForm: ReportForm = {
   userName: "",
   contactNo: "",
   location: "",
+  deviceType: "Laptop",
   model: "",
   serialNumber: "",
   issue: "",
@@ -99,6 +101,7 @@ export default function ReportPage() {
       !form.userName.trim() ||
       !form.contactNo.trim() ||
       !form.location.trim() ||
+      !form.deviceType.trim() ||
       !form.model.trim() ||
       !form.serialNumber.trim() ||
       !form.issue.trim()
@@ -127,6 +130,7 @@ export default function ReportPage() {
         userName: form.userName.trim(),
         contactNo: form.contactNo.trim(),
         location: form.location.trim(),
+        deviceType: form.deviceType.trim(),
         model: form.model.trim(),
         serialNumber: form.serialNumber.trim(),
         issue: form.issue.trim(),
@@ -174,10 +178,17 @@ export default function ReportPage() {
           ticketId: ticketRef.id,
           ticketCode,
           userEmail: user.email,
-          subject: form.model.trim(),
+          subject: `${form.deviceType.trim()} - ${form.model.trim()}`,
           description: form.issue.trim(),
           priority: "Medium",
           autoReplyMessage,
+          userName: form.userName.trim(),
+          contactNo: form.contactNo.trim(),
+          location: form.location.trim(),
+          deviceType: form.deviceType.trim(),
+          model: form.model.trim(),
+          serialNumber: form.serialNumber.trim(),
+          issue: form.issue.trim(),
         }),
       });
 
@@ -187,7 +198,7 @@ export default function ReportPage() {
       }
 
       setForm(defaultForm);
-      setSuccess("Report submitted successfully! Auto reply message sent to you and admins.");
+      setSuccess("You have succesfully submitted the ticket");
       setTimeout(() => {
         router.push("/");
       }, 2000);
@@ -282,6 +293,19 @@ export default function ReportPage() {
                     placeholder="City/Branch"
                     required
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-white">Device Type <span className="text-rose-300">*</span></label>
+                  <select
+                    value={form.deviceType}
+                    onChange={(e) => setForm({ ...form, deviceType: e.target.value })}
+                    className="w-full rounded-xl border border-white/10 bg-slate-950/55 px-4 py-3 text-white outline-none transition focus:border-cyan-400/50"
+                    required
+                  >
+                    <option value="Laptop">Laptop</option>
+                    <option value="Desktop">Desktop</option>
+                  </select>
                 </div>
 
                 <div className="space-y-2">

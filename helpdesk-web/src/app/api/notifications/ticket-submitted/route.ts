@@ -8,6 +8,13 @@ type TicketSubmittedPayload = {
   description?: string;
   priority?: string;
   autoReplyMessage?: string;
+  userName?: string;
+  contactNo?: string;
+  location?: string;
+  deviceType?: string;
+  model?: string;
+  serialNumber?: string;
+  issue?: string;
 };
 
 const DEFAULT_AUTO_REPLY_MESSAGE = "Thank you for your report. We have received your submission and will contact you soon for further action.";
@@ -23,18 +30,30 @@ function escapeHtml(value: string) {
 
 function buildCorporateEmail(params: {
   ticketLabel: string;
-  subject: string;
-  description: string;
+  details: Array<{ label: string; value: string; preserveLineBreaks?: boolean }>;
   priority: string;
   autoReplyMessage: string;
   isAdminCopy?: boolean;
 }) {
   const ticketLabel = escapeHtml(params.ticketLabel);
-  const subject = escapeHtml(params.subject || "N/A");
-  const description = escapeHtml(params.description || "N/A");
   const priority = escapeHtml(params.priority || "N/A");
   const autoReplyMessage = escapeHtml(params.autoReplyMessage);
   const title = params.isAdminCopy ? "Admin Ticket Notification" : "Ticket Submission Confirmation";
+  const detailsRows = params.details
+    .map((item) => {
+      const value = escapeHtml(item.value || "N/A");
+      const valueStyle = item.preserveLineBreaks
+        ? "padding:10px 0;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:14px;line-height:1.7;white-space:pre-line;"
+        : "padding:10px 0;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:14px;font-weight:600;";
+
+      return `
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;width:160px;color:#64748b;font-size:13px;vertical-align:${item.preserveLineBreaks ? "top" : "middle"};">${escapeHtml(item.label)}</td>
+          <td style="${valueStyle}">${value}</td>
+        </tr>
+      `;
+    })
+    .join("");
 
   return `
     <div style="margin:0;padding:0;background:#eef3f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
@@ -59,14 +78,7 @@ function buildCorporateEmail(params: {
           </div>
 
           <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 22px;">
-            <tr>
-              <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;width:140px;color:#64748b;font-size:13px;">Subject</td>
-              <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:14px;font-weight:600;">${subject}</td>
-            </tr>
-            <tr>
-              <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;width:140px;color:#64748b;font-size:13px;vertical-align:top;">Description</td>
-              <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:14px;line-height:1.7;white-space:pre-line;">${description}</td>
-            </tr>
+            ${detailsRows}
           </table>
 
           <div style="margin-top:26px;padding:16px 18px;background:#f1f5f9;border-left:4px solid #0ea5e9;border-radius:10px;color:#475569;font-size:13px;line-height:1.7;">
@@ -112,6 +124,13 @@ export async function POST(request: Request) {
     const autoReplyMessage = String(payload.autoReplyMessage ?? DEFAULT_AUTO_REPLY_MESSAGE).trim() || DEFAULT_AUTO_REPLY_MESSAGE;
     const ticketId = String(payload.ticketId ?? "").trim();
     const ticketCode = String(payload.ticketCode ?? "").trim();
+    const userName = String(payload.userName ?? "").trim();
+    const contactNo = String(payload.contactNo ?? "").trim();
+    const location = String(payload.location ?? "").trim();
+    const deviceType = String(payload.deviceType ?? "").trim();
+    const model = String(payload.model ?? "").trim();
+    const serialNumber = String(payload.serialNumber ?? "").trim();
+    const issue = String(payload.issue ?? "").trim();
 
     if (!userEmail) {
       return Response.json({ error: "Missing user email." }, { status: 400 });
@@ -137,25 +156,50 @@ export async function POST(request: Request) {
     const ticketIdentifier = ticketCode || ticketId || "N/A";
     const ticketLabel = ticketIdentifier !== "N/A" ? `Ticket ${ticketIdentifier}` : "New Ticket";
     const emailSubject = `${ticketLabel} Submitted - ${subject || "KLSB Helpdesk"}`;
+    const hasFullReportFields = Boolean(userName || contactNo || location || deviceType || model || serialNumber || issue);
+    const detailRows = hasFullReportFields
+      ? [
+          { label: "Full Name", value: userName || "N/A" },
+          { label: "Contact No.", value: contactNo || "N/A" },
+          { label: "Location", value: location || "N/A" },
+          { label: "Device Type", value: deviceType || "N/A" },
+          { label: "Model", value: model || "N/A" },
+          { label: "Serial Number", value: serialNumber || "N/A" },
+          { label: "Report an Issue", value: issue || "N/A", preserveLineBreaks: true },
+        ]
+      : [
+          { label: "Subject", value: subject || "N/A" },
+          { label: "Description", value: description || "N/A", preserveLineBreaks: true },
+        ];
     const bodyLines = [
       autoReplyMessage,
       "",
       `Ticket ID: ${ticketIdentifier}`,
-      `Subject: ${subject || "N/A"}`,
+      ...(hasFullReportFields
+        ? [
+            `Full Name: ${userName || "N/A"}`,
+            `Contact No.: ${contactNo || "N/A"}`,
+            `Location: ${location || "N/A"}`,
+            `Device Type: ${deviceType || "N/A"}`,
+            `Model: ${model || "N/A"}`,
+            `Serial Number: ${serialNumber || "N/A"}`,
+            `Report an Issue: ${issue || "N/A"}`,
+          ]
+        : [
+            `Subject: ${subject || "N/A"}`,
+            `Description: ${description || "N/A"}`,
+          ]),
       `Priority: ${priority || "N/A"}`,
-      `Description: ${description || "N/A"}`,
     ];
     const userHtml = buildCorporateEmail({
       ticketLabel,
-      subject,
-      description,
+      details: detailRows,
       priority,
       autoReplyMessage,
     });
     const adminHtml = buildCorporateEmail({
       ticketLabel,
-      subject,
-      description,
+      details: detailRows,
       priority,
       autoReplyMessage,
       isAdminCopy: true,
