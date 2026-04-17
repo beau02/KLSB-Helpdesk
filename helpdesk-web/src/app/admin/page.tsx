@@ -275,6 +275,13 @@ export default function AdminPage() {
             <BrandLogo />
           </div>
           <div className="flex items-center gap-8">
+            <button
+              type="button"
+              onClick={() => router.push("/admin/register")}
+              className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/20 hover:text-cyan-100"
+            >
+              New Admin
+            </button>
             <div className="text-right">
               <p className="text-sm text-slate-300">Logged in as</p>
               <p className="font-semibold text-white">{user.email}</p>
