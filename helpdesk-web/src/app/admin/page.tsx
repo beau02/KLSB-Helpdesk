@@ -22,11 +22,11 @@ import { auth, db, firebaseReady } from "@/lib/firebase";
 type Ticket = {
   id: string;
   ticketNumber: number;
+  displayTicketNumber: number;
   userId: string;
   userEmail: string;
   subject: string;
   description: string;
-  category: string;
   priority: string;
   status: "On Going" | "Closed";
   autoReply: string;
@@ -49,6 +49,12 @@ function formatTicketDate(value: Ticket["createdAt"]) {
 
 function formatTicketCode(value: number) {
   return `KLSB-${String(value).padStart(3, "0")}`;
+}
+
+function getTicketTimestamp(value: Ticket["createdAt"]) {
+  if (!value) return 0;
+  const date = value instanceof Date ? value : value.toDate();
+  return date.getTime();
 }
 
 function normalizeTicketStatus(value: unknown): "On Going" | "Closed" {
@@ -149,16 +155,15 @@ export default function AdminPage() {
           const issueText = String(data.issue ?? "").trim();
           const descriptionText = String(data.description ?? "").trim();
           const modelText = String(data.model ?? "").trim();
-          const subjectText = String(data.subject ?? "").trim();
 
           return {
             id: doc.id,
             ticketNumber: Number(data.ticketNumber ?? index + 1),
+            displayTicketNumber: 1,
             userId: String(data.userId ?? ""),
             userEmail: String(data.userEmail ?? ""),
-            subject: subjectText || modelText || issueText.slice(0, 60) || "Issue Report",
+            subject: descriptionText || issueText || "Issue Report",
             description: descriptionText || issueText,
-            category: String(data.category ?? "General"),
             priority: String(data.priority ?? "Medium"),
             status: normalizeTicketStatus(data.status),
             autoReply: String(data.autoReply ?? ""),
@@ -170,8 +175,17 @@ export default function AdminPage() {
           } satisfies Ticket;
         });
 
-        // Sort by ticket number in descending order (newest first)
-        nextTickets.sort((a, b) => b.ticketNumber - a.ticketNumber);
+        // FIFO ordering for admin queue (oldest first).
+        nextTickets.sort((a, b) => {
+          const timestampDiff = getTicketTimestamp(a.createdAt) - getTicketTimestamp(b.createdAt);
+          if (timestampDiff !== 0) return timestampDiff;
+          return a.ticketNumber - b.ticketNumber;
+        });
+
+        // Global numbering across all reports in FIFO order.
+        nextTickets.forEach((ticket, index) => {
+          ticket.displayTicketNumber = index + 1;
+        });
 
         setTickets(nextTickets);
       },
@@ -323,7 +337,6 @@ export default function AdminPage() {
                     <th className="px-6 py-4 text-left font-semibold text-white">ID</th>
                     <th className="px-6 py-4 text-left font-semibold text-white">User Email</th>
                     <th className="px-6 py-4 text-left font-semibold text-white">Subject</th>
-                    <th className="px-6 py-4 text-left font-semibold text-white">Category</th>
                     <th className="px-6 py-4 text-left font-semibold text-white">Priority</th>
                     <th className="px-6 py-4 text-left font-semibold text-white">Status</th>
                     <th className="px-6 py-4 text-left font-semibold text-white">Date</th>
@@ -333,17 +346,16 @@ export default function AdminPage() {
                 <tbody className="divide-y divide-slate-700/40">
                   {filteredTickets.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-8 text-center text-slate-400">
+                      <td colSpan={7} className="px-6 py-8 text-center text-slate-400">
                         No tickets found
                       </td>
                     </tr>
                   ) : (
-                    filteredTickets.map((ticket, index) => (
+                    filteredTickets.map((ticket) => (
                       <tr key={ticket.id} className="hover:bg-slate-900/50 transition">
-                        <td className="px-6 py-4 font-mono text-xs text-cyan-300">{formatTicketCode(index + 1)}</td>
+                        <td className="px-6 py-4 font-mono text-xs text-cyan-300">{formatTicketCode(ticket.displayTicketNumber)}</td>
                         <td className="px-6 py-4 text-slate-300">{ticket.userEmail}</td>
                         <td className="px-6 py-4 max-w-xs truncate text-white">{ticket.subject}</td>
-                        <td className="px-6 py-4 text-slate-300">{ticket.category}</td>
                         <td className="px-6 py-4">
                           <span
                             className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
@@ -396,7 +408,7 @@ export default function AdminPage() {
             <div className="flex items-start justify-between mb-6 border-b border-slate-700/40 pb-6">
               <div>
                 <h2 className="text-2xl font-bold text-white">{selectedTicket.subject}</h2>
-                <p className="text-sm text-slate-400 mt-2">Ticket #: <span className="font-mono text-cyan-300">{formatTicketCode(filteredTickets.findIndex((ticket) => ticket.id === selectedTicket.id) + 1)}</span></p>
+                <p className="text-sm text-slate-400 mt-2">Ticket #: <span className="font-mono text-cyan-300">{formatTicketCode(selectedTicket.displayTicketNumber)}</span></p>
               </div>
               <button
                 onClick={() => setSelectedTicket(null)}
@@ -411,10 +423,6 @@ export default function AdminPage() {
                 <div>
                   <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">User Email</p>
                   <p className="text-white">{selectedTicket.userEmail}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Category</p>
-                  <p className="text-white">{selectedTicket.category}</p>
                 </div>
               </div>
 
@@ -467,9 +475,9 @@ export default function AdminPage() {
               </div>
 
               <div className="border-t border-slate-700/40 pt-4">
-                <p className="text-xs uppercase tracking-wider text-slate-400 mb-3">Auto Reply</p>
+                <p className="text-xs uppercase tracking-wider text-slate-400 mb-3">Auto Reply Message</p>
                 <p className="text-slate-300 leading-relaxed whitespace-pre-wrap rounded-lg border border-slate-700/40 bg-slate-800/30 p-3">
-                  {selectedTicket.autoReply || "No auto reply recorded."}
+                  {selectedTicket.autoReply || "No auto reply message recorded."}
                 </p>
               </div>
 

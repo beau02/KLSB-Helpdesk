@@ -9,7 +9,7 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, query, where, type DocumentData } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, type DocumentData } from "firebase/firestore";
 import { auth, db, firebaseReady } from "@/lib/firebase";
 
 type Ticket = {
@@ -141,6 +141,19 @@ function getTimelineSteps(ticket: Ticket): TimelineStep[] {
     },
   ];
 
+  if (ticket.autoReply) {
+    steps.push({
+      title: "Auto Reply Message",
+      date: ticket.createdAt,
+      summary: "",
+      detail: ticket.autoReply,
+      iconClassName: "bg-cyan-500/30 border-cyan-400/50",
+      dotClassName: "bg-cyan-400",
+      lineClassName: "from-cyan-400/50",
+      detailBorderClassName: "border-cyan-400/50",
+    });
+  }
+
   if (ticket.assignedAdminEmail) {
     steps.push({
       title: `In Charge: ${ticket.assignedAdminEmail}`,
@@ -263,20 +276,22 @@ export default function TicketDetailPage() {
           userId: String(data.userId ?? ""),
         });
 
-        const userTicketsQuery = query(collection(firestore, "tickets"), where("userId", "==", user.uid));
-        const userTicketsSnapshot = await getDocs(userTicketsQuery);
-        const userTickets = userTicketsSnapshot.docs
+        const allTicketsSnapshot = await getDocs(collection(firestore, "tickets"));
+        const allTickets = allTicketsSnapshot.docs
           .map((ticketDocument) => ({
             id: ticketDocument.id,
+            ticketNumber: Number(ticketDocument.data().ticketNumber ?? 0),
             createdAt: ticketDocument.data().createdAt ?? null,
           }))
           .sort((a, b) => {
             const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
             const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
-            return dateA.getTime() - dateB.getTime();
+            const timeDiff = dateA.getTime() - dateB.getTime();
+            if (timeDiff !== 0) return timeDiff;
+            return a.ticketNumber - b.ticketNumber;
           });
 
-        const ticketIndex = userTickets.findIndex((ticketItem) => ticketItem.id === ticketDoc.id);
+        const ticketIndex = allTickets.findIndex((ticketItem) => ticketItem.id === ticketDoc.id);
         setTicketCode(formatTicketCode(ticketIndex >= 0 ? ticketIndex + 1 : 1));
         setLoading(false);
       } catch (err) {
@@ -351,14 +366,6 @@ export default function TicketDetailPage() {
                   {ticket.status}
                 </span>
               </div>
-
-              {/* Admin in Charge */}
-              {ticket.assignedAdminEmail && (
-                <div className="mb-8 rounded-lg border border-indigo-400/30 bg-indigo-500/10 p-4">
-                  <p className="text-xs uppercase tracking-wider text-indigo-300 mb-1">In Charge Of This Ticket</p>
-                  <p className="text-lg font-semibold text-indigo-100">{ticket.assignedAdminEmail}</p>
-                </div>
-              )}
 
               {/* Timeline */}
               <div className="mb-12 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-8">

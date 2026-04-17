@@ -234,7 +234,7 @@ export default function Home() {
     try {
       const autoReplyMessage = "Your ticket has been received. Our support team will review it and respond as soon as possible.";
 
-      await addDoc(collection(db, "tickets"), {
+      const ticketRef = await addDoc(collection(db, "tickets"), {
         userId: user.uid,
         userEmail: user.email,
         subject: ticketForm.subject.trim(),
@@ -249,8 +249,29 @@ export default function Home() {
         repliedAt: serverTimestamp(),
       });
 
+      const notificationResponse = await fetch("/api/notifications/ticket-submitted", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ticketId: ticketRef.id,
+          userEmail: user.email,
+          subject: ticketForm.subject.trim(),
+          description: ticketForm.description.trim(),
+          category: ticketForm.category,
+          priority: ticketForm.priority,
+          autoReplyMessage,
+        }),
+      });
+
+      if (!notificationResponse.ok) {
+        const result = (await notificationResponse.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(result?.error || "Ticket was saved, but the email notification failed.");
+      }
+
       setTicketForm(defaultForm);
-      setTicketSuccess("Ticket created successfully.");
+      setTicketSuccess("Ticket created successfully. Auto reply message sent to you and the admins.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to create ticket.";
       setTicketError(message);

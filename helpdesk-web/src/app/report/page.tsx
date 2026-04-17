@@ -12,8 +12,10 @@ import {
 import {
   collection,
   doc,
+  getDocs,
   serverTimestamp,
   setDoc,
+  type DocumentData,
 } from "firebase/firestore";
 import { auth, db, firebaseReady } from "@/lib/firebase";
 
@@ -34,6 +36,20 @@ const defaultForm: ReportForm = {
   serialNumber: "",
   issue: "",
 };
+
+function formatTicketCode(value: number) {
+  return `KLSB-${String(value).padStart(3, "0")}`;
+}
+
+function getTicketTimestamp(value: unknown) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "object" && value !== null && "toDate" in value) {
+    const dateValue = (value as { toDate: () => Date }).toDate();
+    return dateValue.getTime();
+  }
+  return 0;
+}
 
 export default function ReportPage() {
   const router = useRouter();
@@ -123,8 +139,55 @@ export default function ReportPage() {
         repliedAt: null,
       });
 
+      let ticketCode = ticketRef.id;
+      try {
+        const allTicketsSnapshot = await getDocs(collection(db, "tickets"));
+        const allTickets = allTicketsSnapshot.docs
+          .map((ticketDocument) => {
+            const data = ticketDocument.data() as DocumentData;
+            return {
+              id: ticketDocument.id,
+              ticketNumber: Number(data.ticketNumber ?? 0),
+              createdAt: data.createdAt ?? null,
+            };
+          })
+          .sort((a, b) => {
+            const timeDiff = getTicketTimestamp(a.createdAt) - getTicketTimestamp(b.createdAt);
+            if (timeDiff !== 0) return timeDiff;
+            return a.ticketNumber - b.ticketNumber;
+          });
+
+        const ticketIndex = allTickets.findIndex((ticketItem) => ticketItem.id === ticketRef.id);
+        if (ticketIndex >= 0) {
+          ticketCode = formatTicketCode(ticketIndex + 1);
+        }
+      } catch {
+        // Keep ticketRef.id fallback when global ordering cannot be resolved.
+      }
+
+      const notificationResponse = await fetch("/api/notifications/ticket-submitted", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ticketId: ticketRef.id,
+          ticketCode,
+          userEmail: user.email,
+          subject: form.model.trim(),
+          description: form.issue.trim(),
+          priority: "Medium",
+          autoReplyMessage,
+        }),
+      });
+
+      if (!notificationResponse.ok) {
+        const result = (await notificationResponse.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(result?.error || "Ticket was saved, but the email notification failed.");
+      }
+
       setForm(defaultForm);
-      setSuccess("Report submitted successfully!");
+      setSuccess("Report submitted successfully! Auto reply message sent to you and admins.");
       setTimeout(() => {
         router.push("/");
       }, 2000);
@@ -186,7 +249,7 @@ export default function ReportPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-white">Full Name</label>
+                  <label className="block text-sm font-semibold text-white">Full Name <span className="text-rose-300">*</span></label>
                   <input
                     type="text"
                     value={form.userName}
@@ -198,7 +261,7 @@ export default function ReportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-white">Contact No.</label>
+                  <label className="block text-sm font-semibold text-white">Contact No. <span className="text-rose-300">*</span></label>
                   <input
                     type="tel"
                     value={form.contactNo}
@@ -210,7 +273,7 @@ export default function ReportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-white">Location</label>
+                  <label className="block text-sm font-semibold text-white">Location <span className="text-rose-300">*</span></label>
                   <input
                     type="text"
                     value={form.location}
@@ -222,7 +285,7 @@ export default function ReportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-white">Model</label>
+                  <label className="block text-sm font-semibold text-white">Model <span className="text-rose-300">*</span></label>
                   <input
                     type="text"
                     value={form.model}
@@ -234,7 +297,7 @@ export default function ReportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-white">Serial Number</label>
+                  <label className="block text-sm font-semibold text-white">Serial Number <span className="text-rose-300">*</span></label>
                   <input
                     type="text"
                     value={form.serialNumber}
@@ -247,7 +310,7 @@ export default function ReportPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-semibold text-white">Report an Issue</label>
+                <label className="block text-sm font-semibold text-white">Report an Issue <span className="text-rose-300">*</span></label>
                 <textarea
                   value={form.issue}
                   onChange={(e) => setForm({ ...form, issue: e.target.value })}
