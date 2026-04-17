@@ -14,6 +14,7 @@ import { auth, db, firebaseReady } from "@/lib/firebase";
 
 type Ticket = {
   id: string;
+  ticketNumber: number;
   userName: string;
   contactNo: string;
   location: string;
@@ -92,11 +93,12 @@ export default function StatusPage() {
     const unsubscribe = onSnapshot(
       ticketsQuery,
       (snapshot) => {
-        const nextTickets = snapshot.docs.map((doc) => {
+        const nextTickets = snapshot.docs.map((doc, index) => {
           const data = doc.data() as DocumentData;
 
           return {
             id: doc.id,
+            ticketNumber: Number(data.ticketNumber ?? index + 1),
             userName: String(data.userName ?? ""),
             contactNo: String(data.contactNo ?? ""),
             location: String(data.location ?? ""),
@@ -109,12 +111,8 @@ export default function StatusPage() {
           } satisfies Ticket;
         });
 
-        // Sort on client side to avoid Firestore composite index requirement.
-        nextTickets.sort((a, b) => {
-          const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
-          const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
-          return dateB.getTime() - dateA.getTime();
-        });
+        // Sort by ticket number in ascending order (oldest first)
+        nextTickets.sort((a, b) => a.ticketNumber - b.ticketNumber);
 
         setTickets(nextTickets);
         setLoading(false);

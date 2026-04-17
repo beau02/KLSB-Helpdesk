@@ -9,11 +9,12 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
-import { doc, getDoc, type DocumentData } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where, type DocumentData } from "firebase/firestore";
 import { auth, db, firebaseReady } from "@/lib/firebase";
 
 type Ticket = {
   id: string;
+  ticketNumber: number;
   userName: string;
   contactNo: string;
   location: string;
@@ -30,6 +31,10 @@ type Ticket = {
   userEmail?: string;
   userId?: string;
 };
+
+function formatTicketCode(value: number) {
+  return `KLSB-${String(value).padStart(3, "0")}`;
+}
 
 function formatTicketDate(value: Ticket["createdAt"]) {
   if (!value) return "Just now";
@@ -187,6 +192,7 @@ export default function TicketDetailPage() {
 
   const [user, setUser] = useState<User | null>(null);
   const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [ticketCode, setTicketCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -239,6 +245,7 @@ export default function TicketDetailPage() {
 
         setTicket({
           id: ticketDoc.id,
+          ticketNumber: Number(data.ticketNumber ?? 1),
           userName: String(data.userName ?? ""),
           contactNo: String(data.contactNo ?? ""),
           location: String(data.location ?? ""),
@@ -255,6 +262,22 @@ export default function TicketDetailPage() {
           userEmail: String(data.userEmail ?? ""),
           userId: String(data.userId ?? ""),
         });
+
+        const userTicketsQuery = query(collection(firestore, "tickets"), where("userId", "==", user.uid));
+        const userTicketsSnapshot = await getDocs(userTicketsQuery);
+        const userTickets = userTicketsSnapshot.docs
+          .map((ticketDocument) => ({
+            id: ticketDocument.id,
+            createdAt: ticketDocument.data().createdAt ?? null,
+          }))
+          .sort((a, b) => {
+            const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
+            const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
+            return dateA.getTime() - dateB.getTime();
+          });
+
+        const ticketIndex = userTickets.findIndex((ticketItem) => ticketItem.id === ticketDoc.id);
+        setTicketCode(formatTicketCode(ticketIndex >= 0 ? ticketIndex + 1 : 1));
         setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error loading ticket");
@@ -320,9 +343,9 @@ export default function TicketDetailPage() {
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h1 className="text-5xl font-bold tracking-tight text-white leading-[1.15] mb-2">
-                    Ticket <span className="bg-gradient-to-r from-cyan-300 via-cyan-200 to-sky-300 bg-clip-text text-transparent">{ticket.model}</span>
+                    Ticket <span className="bg-gradient-to-r from-cyan-300 via-cyan-200 to-sky-300 bg-clip-text text-transparent">{ticketCode || formatTicketCode(1)}</span>
                   </h1>
-                  <p className="text-slate-400">Serial: {ticket.serialNumber}</p>
+                  <p className="text-slate-400">Model: {ticket.model} | Serial: {ticket.serialNumber}</p>
                 </div>
                 <span className={`inline-block rounded-lg border px-4 py-2 text-sm font-semibold ${getStatusColor(ticket.status)}`}>
                   {ticket.status}

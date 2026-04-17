@@ -21,6 +21,7 @@ import { auth, db, firebaseReady } from "@/lib/firebase";
 
 type Ticket = {
   id: string;
+  ticketNumber: number;
   userId: string;
   userEmail: string;
   subject: string;
@@ -44,6 +45,10 @@ function formatTicketDate(value: Ticket["createdAt"]) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function formatTicketCode(value: number) {
+  return `KLSB-${String(value).padStart(3, "0")}`;
 }
 
 function normalizeTicketStatus(value: unknown): "On Going" | "Closed" {
@@ -139,7 +144,7 @@ export default function AdminPage() {
     return onSnapshot(
       ticketsQuery,
       (snapshot) => {
-        const nextTickets = snapshot.docs.map((doc) => {
+        const nextTickets = snapshot.docs.map((doc, index) => {
           const data = doc.data() as DocumentData;
           const issueText = String(data.issue ?? "").trim();
           const descriptionText = String(data.description ?? "").trim();
@@ -148,6 +153,7 @@ export default function AdminPage() {
 
           return {
             id: doc.id,
+            ticketNumber: Number(data.ticketNumber ?? index + 1),
             userId: String(data.userId ?? ""),
             userEmail: String(data.userEmail ?? ""),
             subject: subjectText || modelText || issueText.slice(0, 60) || "Issue Report",
@@ -164,12 +170,8 @@ export default function AdminPage() {
           } satisfies Ticket;
         });
 
-        // Sort by createdAt descending
-        nextTickets.sort((a, b) => {
-          const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
-          const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
-          return dateB.getTime() - dateA.getTime();
-        });
+        // Sort by ticket number in descending order (newest first)
+        nextTickets.sort((a, b) => b.ticketNumber - a.ticketNumber);
 
         setTickets(nextTickets);
       },
@@ -336,9 +338,9 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredTickets.map((ticket) => (
+                    filteredTickets.map((ticket, index) => (
                       <tr key={ticket.id} className="hover:bg-slate-900/50 transition">
-                        <td className="px-6 py-4 font-mono text-xs text-cyan-300">{ticket.id.substring(0, 8)}</td>
+                        <td className="px-6 py-4 font-mono text-xs text-cyan-300">{formatTicketCode(index + 1)}</td>
                         <td className="px-6 py-4 text-slate-300">{ticket.userEmail}</td>
                         <td className="px-6 py-4 max-w-xs truncate text-white">{ticket.subject}</td>
                         <td className="px-6 py-4 text-slate-300">{ticket.category}</td>
@@ -394,7 +396,7 @@ export default function AdminPage() {
             <div className="flex items-start justify-between mb-6 border-b border-slate-700/40 pb-6">
               <div>
                 <h2 className="text-2xl font-bold text-white">{selectedTicket.subject}</h2>
-                <p className="text-sm text-slate-400 mt-2">Ticket ID: <span className="font-mono text-cyan-300">{selectedTicket.id}</span></p>
+                <p className="text-sm text-slate-400 mt-2">Ticket #: <span className="font-mono text-cyan-300">{formatTicketCode(filteredTickets.findIndex((ticket) => ticket.id === selectedTicket.id) + 1)}</span></p>
               </div>
               <button
                 onClick={() => setSelectedTicket(null)}

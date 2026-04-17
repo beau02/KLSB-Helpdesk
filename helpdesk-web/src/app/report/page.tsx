@@ -10,9 +10,10 @@ import {
   type User,
 } from "firebase/auth";
 import {
-  addDoc,
   collection,
+  doc,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 import { auth, db, firebaseReady } from "@/lib/firebase";
 
@@ -93,9 +94,18 @@ export default function ReportPage() {
     setSubmitting(true);
 
     try {
-      const autoReplyMessage = "Your ticket has been received. Our support team will review it and respond as soon as possible.";
+      if (!db) {
+        setError("Database connection failed.");
+        setSubmitting(false);
+        return;
+      }
 
-      await addDoc(collection(db, "tickets"), {
+      const autoReplyMessage = "Your ticket has been received. Our support team will review it and respond as soon as possible.";
+      const ticketNumber = Date.now();
+      const ticketRef = doc(collection(db!, "tickets"));
+
+      await setDoc(ticketRef, {
+        ticketNumber,
         userId: user.uid,
         userEmail: user.email,
         userName: form.userName.trim(),
@@ -107,9 +117,10 @@ export default function ReportPage() {
         status: "On Going",
         autoReply: autoReplyMessage,
         adminReply: "",
+        assignedAdminEmail: "",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        repliedAt: serverTimestamp(),
+        repliedAt: null,
       });
 
       setForm(defaultForm);
