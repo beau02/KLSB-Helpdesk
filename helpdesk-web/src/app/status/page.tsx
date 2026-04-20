@@ -11,10 +11,13 @@ import {
 } from "firebase/auth";
 import { collection, onSnapshot, query, where, type DocumentData } from "firebase/firestore";
 import { auth, db, firebaseReady } from "@/lib/firebase";
+import { resolveTicketCode, resolveTicketNumber } from "@/lib/ticket";
 
 type Ticket = {
   id: string;
   ticketNumber: number;
+  ticketCode: string;
+  displayTicketNumber: number;
   userName: string;
   contactNo: string;
   location: string;
@@ -99,6 +102,8 @@ export default function StatusPage() {
           return {
             id: doc.id,
             ticketNumber: Number(data.ticketNumber ?? index + 1),
+            ticketCode: String(data.ticketCode ?? "").trim(),
+            displayTicketNumber: 0,
             userName: String(data.userName ?? ""),
             contactNo: String(data.contactNo ?? ""),
             location: String(data.location ?? ""),
@@ -111,8 +116,33 @@ export default function StatusPage() {
           } satisfies Ticket;
         });
 
-        // Sort by ticket number in ascending order (oldest first)
-        nextTickets.sort((a, b) => a.ticketNumber - b.ticketNumber);
+        // Keep a stable chronological rank so oldest submission remains KLSB-001.
+        const chronologicalTickets = [...nextTickets].sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
+          const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
+          const timeDiff = dateA.getTime() - dateB.getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return a.id.localeCompare(b.id);
+        });
+
+        const ticketRankById = new Map<string, number>();
+        chronologicalTickets.forEach((ticket, index) => {
+          ticketRankById.set(ticket.id, index + 1);
+        });
+
+        // Show latest tickets first.
+        nextTickets.sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
+          const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
+          const timeDiff = dateB.getTime() - dateA.getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return b.id.localeCompare(a.id);
+        });
+
+        nextTickets.forEach((ticket) => {
+          const chronologicalRank = ticketRankById.get(ticket.id) ?? 1;
+          ticket.displayTicketNumber = resolveTicketNumber(ticket.ticketCode, ticket.ticketNumber, chronologicalRank);
+        });
 
         setTickets(nextTickets);
         setLoading(false);
@@ -202,6 +232,7 @@ export default function StatusPage() {
                 >
                   <div className="mb-4 flex items-start justify-between gap-4">
                     <div className="flex-1">
+                      <p className="mb-2 font-mono text-xs text-cyan-300">{resolveTicketCode(ticket.ticketCode, ticket.ticketNumber, ticket.displayTicketNumber)}</p>
                       <div className="mb-2 flex items-center gap-3">
                         <h3 className="text-lg font-semibold text-white">{ticket.model}</h3>
                         <span className={`inline-block rounded-lg border px-3 py-1 text-xs font-semibold ${getStatusColor(ticket.status)}`}>

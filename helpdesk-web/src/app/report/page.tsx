@@ -12,12 +12,11 @@ import {
 import {
   collection,
   doc,
-  getDocs,
   serverTimestamp,
   setDoc,
-  type DocumentData,
 } from "firebase/firestore";
 import { auth, db, firebaseReady } from "@/lib/firebase";
+import { allocateNextTicketNumber, formatTicketCode } from "@/lib/ticket";
 
 type ReportForm = {
   userName: string;
@@ -38,20 +37,6 @@ const defaultForm: ReportForm = {
   serialNumber: "",
   issue: "",
 };
-
-function formatTicketCode(value: number) {
-  return `KLSB-${String(value).padStart(3, "0")}`;
-}
-
-function getTicketTimestamp(value: unknown) {
-  if (!value) return 0;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const dateValue = (value as { toDate: () => Date }).toDate();
-    return dateValue.getTime();
-  }
-  return 0;
-}
 
 export default function ReportPage() {
   const router = useRouter();
@@ -120,11 +105,13 @@ export default function ReportPage() {
       }
 
       const autoReplyMessage = "Thank you for your report. We have received your submission and will contact you soon for further action.";
-      const ticketNumber = Date.now();
+      const ticketNumber = await allocateNextTicketNumber(db);
+      const ticketCode = formatTicketCode(ticketNumber);
       const ticketRef = doc(collection(db!, "tickets"));
 
       await setDoc(ticketRef, {
         ticketNumber,
+        ticketCode,
         userId: user.uid,
         userEmail: user.email,
         userName: form.userName.trim(),
@@ -142,32 +129,6 @@ export default function ReportPage() {
         updatedAt: serverTimestamp(),
         repliedAt: null,
       });
-
-      let ticketCode = ticketRef.id;
-      try {
-        const allTicketsSnapshot = await getDocs(collection(db, "tickets"));
-        const allTickets = allTicketsSnapshot.docs
-          .map((ticketDocument) => {
-            const data = ticketDocument.data() as DocumentData;
-            return {
-              id: ticketDocument.id,
-              ticketNumber: Number(data.ticketNumber ?? 0),
-              createdAt: data.createdAt ?? null,
-            };
-          })
-          .sort((a, b) => {
-            const timeDiff = getTicketTimestamp(a.createdAt) - getTicketTimestamp(b.createdAt);
-            if (timeDiff !== 0) return timeDiff;
-            return a.ticketNumber - b.ticketNumber;
-          });
-
-        const ticketIndex = allTickets.findIndex((ticketItem) => ticketItem.id === ticketRef.id);
-        if (ticketIndex >= 0) {
-          ticketCode = formatTicketCode(ticketIndex + 1);
-        }
-      } catch {
-        // Keep ticketRef.id fallback when global ordering cannot be resolved.
-      }
 
       const notificationResponse = await fetch("/api/notifications/ticket-submitted", {
         method: "POST",

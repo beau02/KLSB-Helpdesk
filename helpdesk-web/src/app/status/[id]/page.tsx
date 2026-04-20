@@ -11,10 +11,12 @@ import {
 } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, type DocumentData } from "firebase/firestore";
 import { auth, db, firebaseReady } from "@/lib/firebase";
+import { formatTicketCode, isValidTicketIdentity, resolveTicketCode } from "@/lib/ticket";
 
 type Ticket = {
   id: string;
   ticketNumber: number;
+  ticketCode: string;
   userName: string;
   contactNo: string;
   location: string;
@@ -32,10 +34,6 @@ type Ticket = {
   userId?: string;
 };
 
-function formatTicketCode(value: number) {
-  return `KLSB-${String(value).padStart(3, "0")}`;
-}
-
 function formatTicketDate(value: Ticket["createdAt"]) {
   if (!value) return "Just now";
 
@@ -44,6 +42,12 @@ function formatTicketDate(value: Ticket["createdAt"]) {
     dateStyle: "full",
     timeStyle: "short",
   }).format(date);
+}
+
+function getTimelineTimestamp(value: Ticket["createdAt"]) {
+  if (!value) return 0;
+  const date = value instanceof Date ? value : value.toDate();
+  return date.getTime();
 }
 
 function getStatusColor(status: string) {
@@ -63,6 +67,16 @@ function normalizeTicketStatus(value: unknown): Ticket["status"] {
     return "Closed";
   }
   return "On Going";
+}
+
+function getTicketTimestamp(value: unknown) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "object" && value !== null && "toDate" in value) {
+    const dateValue = (value as { toDate: () => Date }).toDate();
+    return dateValue.getTime();
+  }
+  return 0;
 }
 
 type TimelineStep = {
@@ -195,7 +209,18 @@ function getTimelineSteps(ticket: Ticket): TimelineStep[] {
     detailBorderClassName: "border-blue-400/50",
   });
 
-  return steps;
+  return steps
+    .map((step, index) => ({
+      step,
+      index,
+      timestamp: getTimelineTimestamp(step.date),
+    }))
+    .sort((a, b) => {
+      const timestampDiff = b.timestamp - a.timestamp;
+      if (timestampDiff !== 0) return timestampDiff;
+      return b.index - a.index;
+    })
+    .map((item) => item.step);
 }
 
 export default function TicketDetailPage() {
@@ -259,6 +284,7 @@ export default function TicketDetailPage() {
         setTicket({
           id: ticketDoc.id,
           ticketNumber: Number(data.ticketNumber ?? 1),
+          ticketCode: String(data.ticketCode ?? "").trim(),
           userName: String(data.userName ?? ""),
           contactNo: String(data.contactNo ?? ""),
           location: String(data.location ?? ""),
@@ -276,23 +302,31 @@ export default function TicketDetailPage() {
           userId: String(data.userId ?? ""),
         });
 
-        const allTicketsSnapshot = await getDocs(collection(firestore, "tickets"));
-        const allTickets = allTicketsSnapshot.docs
-          .map((ticketDocument) => ({
-            id: ticketDocument.id,
-            ticketNumber: Number(ticketDocument.data().ticketNumber ?? 0),
-            createdAt: ticketDocument.data().createdAt ?? null,
-          }))
-          .sort((a, b) => {
-            const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt?.toDate() ?? new Date(0);
-            const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt?.toDate() ?? new Date(0);
-            const timeDiff = dateA.getTime() - dateB.getTime();
-            if (timeDiff !== 0) return timeDiff;
-            return a.ticketNumber - b.ticketNumber;
-          });
+        const ticketNumber = Number(data.ticketNumber ?? 0);
+        const storedCode = String(data.ticketCode ?? "").trim();
 
-        const ticketIndex = allTickets.findIndex((ticketItem) => ticketItem.id === ticketDoc.id);
-        setTicketCode(formatTicketCode(ticketIndex >= 0 ? ticketIndex + 1 : 1));
+        if (isValidTicketIdentity(storedCode, ticketNumber)) {
+          setTicketCode(resolveTicketCode(storedCode, ticketNumber, 1));
+        } else {
+          const allTicketsSnapshot = await getDocs(collection(firestore, "tickets"));
+          const allTickets = allTicketsSnapshot.docs
+            .map((ticketDocument) => {
+              const ticketData = ticketDocument.data() as DocumentData;
+              return {
+                id: ticketDocument.id,
+                createdAt: ticketData.createdAt ?? null,
+              };
+            })
+            .sort((a, b) => {
+              const timestampDiff = getTicketTimestamp(a.createdAt) - getTicketTimestamp(b.createdAt);
+              if (timestampDiff !== 0) return timestampDiff;
+              return a.id.localeCompare(b.id);
+            });
+
+          const ticketIndex = allTickets.findIndex((ticketItem) => ticketItem.id === ticketDoc.id);
+          setTicketCode(formatTicketCode(ticketIndex >= 0 ? ticketIndex + 1 : 1));
+        }
+
         setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error loading ticket");

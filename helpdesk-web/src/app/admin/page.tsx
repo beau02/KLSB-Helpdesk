@@ -18,10 +18,12 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { auth, db, firebaseReady } from "@/lib/firebase";
+import { resolveTicketCode, resolveTicketNumber } from "@/lib/ticket";
 
 type Ticket = {
   id: string;
   ticketNumber: number;
+  ticketCode: string;
   displayTicketNumber: number;
   userId: string;
   userEmail: string;
@@ -45,10 +47,6 @@ function formatTicketDate(value: Ticket["createdAt"]) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
-}
-
-function formatTicketCode(value: number) {
-  return `KLSB-${String(value).padStart(3, "0")}`;
 }
 
 function getTicketTimestamp(value: Ticket["createdAt"]) {
@@ -150,16 +148,16 @@ export default function AdminPage() {
     return onSnapshot(
       ticketsQuery,
       (snapshot) => {
-        const nextTickets = snapshot.docs.map((doc, index) => {
+        const nextTickets = snapshot.docs.map((doc) => {
           const data = doc.data() as DocumentData;
           const issueText = String(data.issue ?? "").trim();
           const descriptionText = String(data.description ?? "").trim();
-          const modelText = String(data.model ?? "").trim();
 
           return {
             id: doc.id,
-            ticketNumber: Number(data.ticketNumber ?? index + 1),
-            displayTicketNumber: 1,
+            ticketNumber: Number(data.ticketNumber ?? 0),
+            ticketCode: String(data.ticketCode ?? "").trim(),
+            displayTicketNumber: 0,
             userId: String(data.userId ?? ""),
             userEmail: String(data.userEmail ?? ""),
             subject: descriptionText || issueText || "Issue Report",
@@ -175,16 +173,29 @@ export default function AdminPage() {
           } satisfies Ticket;
         });
 
-        // FIFO ordering for admin queue (oldest first).
-        nextTickets.sort((a, b) => {
+        // Keep a stable chronological rank so oldest submission remains KLSB-001.
+        const chronologicalTickets = [...nextTickets].sort((a, b) => {
           const timestampDiff = getTicketTimestamp(a.createdAt) - getTicketTimestamp(b.createdAt);
           if (timestampDiff !== 0) return timestampDiff;
-          return a.ticketNumber - b.ticketNumber;
+          return a.id.localeCompare(b.id);
         });
 
-        // Global numbering across all reports in FIFO order.
-        nextTickets.forEach((ticket, index) => {
-          ticket.displayTicketNumber = index + 1;
+        const ticketRankById = new Map<string, number>();
+        chronologicalTickets.forEach((ticket, index) => {
+          ticketRankById.set(ticket.id, index + 1);
+        });
+
+        // Show latest tickets first.
+        nextTickets.sort((a, b) => {
+          const timestampDiff = getTicketTimestamp(b.createdAt) - getTicketTimestamp(a.createdAt);
+          if (timestampDiff !== 0) return timestampDiff;
+          return b.id.localeCompare(a.id);
+        });
+
+        // Use validated ticket number values and ignore legacy timestamp-based values.
+        nextTickets.forEach((ticket) => {
+          const chronologicalRank = ticketRankById.get(ticket.id) ?? 1;
+          ticket.displayTicketNumber = resolveTicketNumber(ticket.ticketCode, ticket.ticketNumber, chronologicalRank);
         });
 
         setTickets(nextTickets);
@@ -360,7 +371,7 @@ export default function AdminPage() {
                   ) : (
                     filteredTickets.map((ticket) => (
                       <tr key={ticket.id} className="hover:bg-slate-900/50 transition">
-                        <td className="px-6 py-4 font-mono text-xs text-cyan-300">{formatTicketCode(ticket.displayTicketNumber)}</td>
+                        <td className="px-6 py-4 font-mono text-xs text-cyan-300">{resolveTicketCode(ticket.ticketCode, ticket.ticketNumber, ticket.displayTicketNumber)}</td>
                         <td className="px-6 py-4 text-slate-300">{ticket.userEmail}</td>
                         <td className="px-6 py-4 max-w-xs truncate text-white">{ticket.subject}</td>
                         <td className="px-6 py-4">
@@ -415,7 +426,7 @@ export default function AdminPage() {
             <div className="flex items-start justify-between mb-6 border-b border-slate-700/40 pb-6">
               <div>
                 <h2 className="text-2xl font-bold text-white">{selectedTicket.subject}</h2>
-                <p className="text-sm text-slate-400 mt-2">Ticket #: <span className="font-mono text-cyan-300">{formatTicketCode(selectedTicket.displayTicketNumber)}</span></p>
+                <p className="text-sm text-slate-400 mt-2">Ticket #: <span className="font-mono text-cyan-300">{resolveTicketCode(selectedTicket.ticketCode, selectedTicket.ticketNumber, selectedTicket.displayTicketNumber)}</span></p>
               </div>
               <button
                 onClick={() => setSelectedTicket(null)}

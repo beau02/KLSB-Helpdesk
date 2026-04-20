@@ -15,13 +15,13 @@ import {
   addDoc,
   collection,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   where,
   type DocumentData,
 } from "firebase/firestore";
 import { auth, db, firebaseReady } from "@/lib/firebase";
+import { allocateNextTicketNumber, formatTicketCode } from "@/lib/ticket";
 
 type Ticket = {
   id: string;
@@ -233,8 +233,12 @@ export default function Home() {
 
     try {
       const autoReplyMessage = "Thank you for your report. We have received your submission and will contact you soon for further action.";
+      const ticketNumber = await allocateNextTicketNumber(db);
+      const ticketCode = formatTicketCode(ticketNumber);
 
       const ticketRef = await addDoc(collection(db, "tickets"), {
+        ticketNumber,
+        ticketCode,
         userId: user.uid,
         userEmail: user.email,
         subject: ticketForm.subject.trim(),
@@ -256,6 +260,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           ticketId: ticketRef.id,
+          ticketCode,
           userEmail: user.email,
           subject: ticketForm.subject.trim(),
           description: ticketForm.description.trim(),
